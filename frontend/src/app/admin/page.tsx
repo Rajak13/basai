@@ -6,7 +6,7 @@ export default function AdminDashboardPage() {
       <div className="flex justify-between items-center border-b pb-4">
         <div>
           <h1 className="text-2xl font-bold">Operations Dashboard</h1>
-          <p className="text-xs text-neutral-500">Live property metrics for Hotel Dharan</p>
+          <p className="text-xs text-neutral-500">Live property metrics for Basai</p>
         </div>
         <div className="flex gap-2 text-xs">
           <Link href="/admin/calendar" className="bg-neutral-900 text-white px-3 py-2 rounded font-medium">

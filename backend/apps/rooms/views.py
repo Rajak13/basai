@@ -20,6 +20,23 @@ class RoomViewSet(viewsets.ModelViewSet):
     queryset = Room.objects.all().select_related("category")
     serializer_class = RoomSerializer
 
+    def create(self, request, *args, **kwargs):
+        tenant = getattr(request, 'tenant', None)
+        if tenant:
+            from apps.tenants.subscription_service import (
+                SubscriptionService,
+                QuotaExceededException,
+                TenantSuspendedException,
+            )
+            try:
+                SubscriptionService.check_resource_quota(tenant, 'rooms')
+            except (QuotaExceededException, TenantSuspendedException) as exc:
+                return Response(
+                    {"error": str(exc), "code": "QUOTA_EXCEEDED"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=["patch"], url_path="update-status")
     def update_cleanliness_status(self, request, pk=None):
         room = self.get_object()

@@ -54,6 +54,7 @@ class ReservationSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "booking_reference",
+            "central_guest_id",
             "guest",
             "guest_name",
             "guest_phone",

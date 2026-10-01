@@ -32,6 +32,8 @@ INSTALLED_APPS = [
     "corsheaders",
     # Local Apps
     "apps.accounts",
+    "apps.tenants",  # Multi-tenant central registry
+    "apps.guests",   # Guest profiles (tenant-specific)
     "apps.rooms",
     "apps.reservations",
     "apps.payments",
@@ -46,6 +48,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Tenant resolution - must be after CommonMiddleware but before views
+    "apps.tenants.middleware.TenantMiddleware",
 ]
 
 ROOT_URLCONF = "hotel_core.urls"
@@ -73,8 +77,16 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
-    }
+    },
+    "tenant_test": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "tenant_test.sqlite3",
+    },
 }
+
+# Database Router Configuration
+# Routes queries to tenant-specific databases based on app label
+DATABASE_ROUTERS = ["apps.tenants.db_router.TenantDatabaseRouter"]
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -114,7 +126,31 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
+}
+
+# JWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": True,
+    
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "VERIFYING_KEY": None,
+    
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
 }
 
 # CORS Configuration for Next.js frontend

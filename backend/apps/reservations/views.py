@@ -10,6 +10,23 @@ class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
     lookup_field = "booking_reference"
 
+    def create(self, request, *args, **kwargs):
+        tenant = getattr(request, 'tenant', None)
+        if tenant:
+            from apps.tenants.subscription_service import (
+                SubscriptionService,
+                QuotaExceededException,
+                TenantSuspendedException,
+            )
+            try:
+                SubscriptionService.check_resource_quota(tenant, 'bookings')
+            except (QuotaExceededException, TenantSuspendedException) as exc:
+                return Response(
+                    {"error": str(exc), "code": "QUOTA_EXCEEDED"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=["post"], url_path="express-checkin")
     def express_checkin(self, request, booking_reference=None):
         reservation = self.get_object()

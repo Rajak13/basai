@@ -1,0 +1,60 @@
+/* ============================================
+   NANTIO BRAND DESIGN SYSTEM
+   Editorial-Architectural Typography Fonts
+   ============================================ */
+
+@font-face {
+  font-family: 'Architype Stedelijk';
+  src: url('/fonts/Architype%20Stedelijk%20W00.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Stedelijk';
+  src: url('/fonts/Architype%20Stedelijk%20W00.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roxborough CF';
+  src: url('/fonts/roxborough-cf-regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Humane';
+  src: url('/fonts/Humane-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Humane';
+  src: url('/fonts/Humane-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Humane';
+  src: url('/fonts/Humane-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Humane';
+  src: url('/fonts/Humane-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}

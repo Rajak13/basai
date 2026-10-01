@@ -23,7 +23,7 @@ export default function BookingCheckoutPage() {
       <div className="border-b pb-4">
         <h1 className="text-2xl font-bold">Booking Engine & Checkout</h1>
         <p className="text-sm text-neutral-500">
-          Complete your reservation at Hotel Dharan with instant confirmation
+          Complete your reservation at Basai with instant confirmation
         </p>
       </div>
 

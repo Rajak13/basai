@@ -14,6 +14,34 @@ class AddonService(models.Model):
         return f"{self.name} (NPR {self.price_npr})"
 
 
+def get_tenant_prefix():
+    """
+    Derive a 3-4 character uppercase prefix for booking references
+    based on the active thread-local tenant schema or slug.
+    Defaults to 'HTL' if no tenant context is set.
+    """
+    from apps.tenants.db_router import get_tenant_schema
+    schema = get_tenant_schema()
+    if schema:
+        from apps.tenants.models import Tenant
+        tenant = Tenant.objects.using('default').filter(models.Q(db_name=schema) | models.Q(slug=schema)).first()
+        if tenant:
+            slug = tenant.slug.lower()
+            if "dharan" in slug:
+                return "DHR"
+            if "pokhara" in slug:
+                return "POK"
+            if "kathmandu" in slug:
+                return "KTM"
+            parts = [p for p in tenant.slug.split('-') if p.lower() not in ('hotel', 'resort', 'inn', 'the', 'lodge')]
+            base = parts[0] if parts else tenant.slug.replace('-', '')
+            return base[:3].upper()
+        if 'tenant_' in schema:
+            name_part = schema.replace('tenant_', '')
+            return name_part[:3].upper()
+    return "HTL"
+
+
 class Reservation(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending Payment / Confirmation"
@@ -29,7 +57,15 @@ class Reservation(models.Model):
         WHATSAPP = "WHATSAPP", "WhatsApp"
 
     booking_reference = models.CharField(max_length=30, unique=True, editable=False)
-    guest = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="reservations")
+    central_guest_id = models.UUIDField(null=True, blank=True, db_index=True)
+    guest = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_constraint=False,
+        related_name="reservations"
+    )
     guest_name = models.CharField(max_length=150)
     guest_phone = models.CharField(max_length=30)
     guest_email = models.EmailField(blank=True)
@@ -56,7 +92,16 @@ class Reservation(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.booking_reference:
-            self.booking_reference = f"DHR-{uuid.uuid4().hex[:8].upper()}"
+            prefix = get_tenant_prefix()
+            using_db = kwargs.get('using', None)
+            while True:
+                candidate = f"{prefix}-{uuid.uuid4().hex[:8].upper()}"
+                qs = Reservation.objects
+                if using_db:
+                    qs = qs.using(using_db)
+                if not qs.filter(booking_reference=candidate).exists():
+                    self.booking_reference = candidate
+                    break
         super().save(*args, **kwargs)
 
     def __str__(self):
