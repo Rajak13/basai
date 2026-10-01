@@ -55,7 +55,7 @@ export default function HomePage() {
         <FooterSection lang={lang} />
 
         {/* FLOATING BOTTOM NAV BAR - PINNED ACROSS SECTIONS */}
-        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40">
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-[calc(100vw-1.5rem)]">
           <BottomFloatingNav
             lang={lang}
             showBookCta={isScrolled}

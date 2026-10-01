@@ -124,7 +124,7 @@ export default function DiningSpotlightSection({
         </div>
 
         {/* CINEMATIC WINDOW CONTAINER */}
-        <div className="relative w-full aspect-4/3 sm:aspect-16/10 lg:aspect-16/9 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
+        <div className="relative w-full min-h-[500px] sm:min-h-0 sm:aspect-16/10 lg:aspect-16/9 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border border-white/10 group flex flex-col justify-center">
           {/* 1. BACKGROUND VIDEO OR FALLBACK POSTER */}
           {videoSrc ? (
             <video
@@ -160,27 +160,27 @@ export default function DiningSpotlightSection({
           </div>
 
           {/* 4. CONTENT OVERLAY */}
-          <div className="relative z-10 w-full h-full flex flex-col items-center justify-center text-center px-4 sm:px-8 py-8 sm:py-12">
+          <div className="relative z-10 w-full flex flex-col items-center justify-center text-center px-4 sm:px-8 py-8 sm:py-12 my-auto">
             
             {/* HEADLINE IN ARCHITYPE STEDELIJK */}
             <h2
-              className="font-stedelijk uppercase text-3xl sm:text-5xl md:text-6xl lg:text-[68px] text-white tracking-wider max-w-4xl leading-[1.06] drop-shadow-lg"
+              className="font-stedelijk uppercase text-2xl sm:text-4xl md:text-5xl lg:text-[68px] text-white tracking-wider max-w-4xl leading-[1.12] sm:leading-[1.06] drop-shadow-lg"
               style={{ textTransform: "uppercase" }}
             >
               TASTE TRADITION AT CHULI
             </h2>
 
             {/* OPENING TIMINGS THREE-COLUMN GRID */}
-            <div className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-8 lg:gap-14 max-w-2xl w-full text-white/90">
+            <div className="mt-6 sm:mt-10 grid grid-cols-1 sm:grid-cols-3 gap-3.5 sm:gap-8 lg:gap-14 max-w-2xl w-full text-white/90">
               {/* COL 1: MON - WED */}
               <div className="flex flex-col items-center">
                 <span className="text-xs sm:text-sm font-medium tracking-wider text-[#DDC8B6]">
                   Monday–Wednesday
                 </span>
-                <span className="text-xs sm:text-sm font-light text-white/80 mt-1">
+                <span className="text-xs sm:text-sm font-light text-white/80 mt-0.5 sm:mt-1">
                   11:00–18:00
                 </span>
-                <span className="text-[11px] sm:text-xs text-white/50">
+                <span className="text-[10px] sm:text-xs text-white/50">
                   Kitchen: 11:30–17:30
                 </span>
               </div>
@@ -190,10 +190,10 @@ export default function DiningSpotlightSection({
                 <span className="text-xs sm:text-sm font-medium tracking-wider text-[#DDC8B6]">
                   Thursday–Saturday
                 </span>
-                <span className="text-xs sm:text-sm font-light text-white/80 mt-1">
+                <span className="text-xs sm:text-sm font-light text-white/80 mt-0.5 sm:mt-1">
                   11:00–23:00
                 </span>
-                <span className="text-[11px] sm:text-xs text-white/50">
+                <span className="text-[10px] sm:text-xs text-white/50">
                   Kitchen: 11:00–21:45
                 </span>
               </div>
@@ -203,21 +203,21 @@ export default function DiningSpotlightSection({
                 <span className="text-xs sm:text-sm font-medium tracking-wider text-[#DDC8B6]">
                   Sunday
                 </span>
-                <span className="text-xs sm:text-sm font-light text-white/80 mt-1">
+                <span className="text-xs sm:text-sm font-light text-white/80 mt-0.5 sm:mt-1">
                   11:00–18:00
                 </span>
-                <span className="text-[11px] sm:text-xs text-white/50">
+                <span className="text-[10px] sm:text-xs text-white/50">
                   Kitchen: 11:30–17:30
                 </span>
               </div>
             </div>
 
             {/* THREE OUTLINED ACTION PILL BUTTONS */}
-            <div className="mt-8 sm:mt-12 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+            <div className="mt-6 sm:mt-12 flex flex-wrap items-center justify-center gap-2.5 sm:gap-4">
               {/* 1. EXPLORE */}
               <Link
                 href="/rooms"
-                className="px-5 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
+                className="px-4 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
               >
                 Explore
               </Link>
@@ -225,7 +225,7 @@ export default function DiningSpotlightSection({
               {/* 2. MENUS */}
               <a
                 href="#dining-menu"
-                className="px-5 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
+                className="px-4 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
               >
                 Menus
               </a>
@@ -233,7 +233,7 @@ export default function DiningSpotlightSection({
               {/* 3. BOOK TABLE */}
               <a
                 href="#book-table"
-                className="px-5 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
+                className="px-4 sm:px-7 py-2 sm:py-2.5 rounded-full border border-white/40 bg-black/25 hover:bg-white/20 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide backdrop-blur-xs transition-all duration-300 shadow-sm"
               >
                 Book table
               </a>
