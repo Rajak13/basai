@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import BasaiLogo from "@/components/public/BasaiLogo";
 import { BASAI_SUITES } from "@/data/suites";
 
 interface RoomDetailPageProps {
@@ -15,10 +16,34 @@ export default async function RoomDetailPage({ params }: RoomDetailPageProps) {
 
   return (
     <div className="w-full min-h-screen bg-[#F7F2EB] text-[#221B18] select-none pb-32">
+      {/* INTEGRATED TOP BAR */}
+      <header className="w-full bg-[#1E1B19] text-[#FAF1E8] px-4 sm:px-8 lg:px-14 py-4 sm:py-5 border-b border-white/10">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between">
+          <Link
+            href="/"
+            className="flex items-center gap-2 group transition-transform hover:scale-105"
+            aria-label="Basai Home"
+          >
+            <BasaiLogo className="h-7 w-auto text-[#E4AA8B]" />
+            <span className="font-stedelijk text-xl tracking-[0.2em] uppercase text-[#E4AA8B]">
+              BASAI
+            </span>
+          </Link>
+
+          <Link
+            href="/rooms"
+            className="text-xs sm:text-sm font-medium text-[#E4AA8B]/80 hover:text-[#E4AA8B] tracking-wider uppercase transition flex items-center gap-1.5"
+          >
+            <span>←</span>
+            <span>All Sanctuaries</span>
+          </Link>
+        </div>
+      </header>
+
       {/* ========================================================
           1. BREADCRUMB & HEADER
           ======================================================== */}
-      <section className="w-full pt-10 sm:pt-14 pb-8 sm:pb-12 px-4 sm:px-8 lg:px-14 border-b border-[#EAE1D5]">
+      <section className="w-full pt-8 sm:pt-12 pb-8 sm:pb-12 px-4 sm:px-8 lg:px-14 border-b border-[#EAE1D5]">
         <div className="max-w-[1440px] mx-auto">
           {/* BREADCRUMB */}
           <div className="flex items-center gap-2 text-xs font-mono tracking-wider text-[#827165] mb-4">
