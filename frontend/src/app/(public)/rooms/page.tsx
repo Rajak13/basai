@@ -664,11 +664,11 @@ export default function RoomsPage() {
                         </ul>
 
                         {/* AMENITIES */}
-                        <div className="mt-5 flex flex-wrap gap-1.5">
+                        <div className="mt-5 flex flex-wrap gap-1.5 font-times">
                           {suite.amenities.slice(0, 5).map((amenity, aIdx) => (
                             <span
                               key={aIdx}
-                              className="text-[11px] bg-[#F7F2EB] text-[#4A3E36] px-2.5 py-1 rounded-md border border-[#E5DACF] font-normal"
+                              className="text-xs bg-[#F7F2EB] text-[#4A3E36] px-2.5 py-1 rounded-md border border-[#E5DACF] font-normal"
                             >
                               {amenity}
                             </span>

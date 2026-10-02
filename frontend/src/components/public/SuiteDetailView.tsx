@@ -474,14 +474,14 @@ export default function SuiteDetailView({ slug }: SuiteDetailViewProps) {
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm sm:text-base font-times">
                 {suite.amenities.map((amenity, aIdx) => (
                   <div
                     key={aIdx}
-                    className="p-3.5 rounded-xl bg-[#FAF7F2] border border-[#E5DACF] text-[#4A3E36] flex items-center gap-3"
+                    className="p-3.5 sm:p-4 rounded-xl bg-[#FAF7F2] border border-[#E5DACF] text-[#3D322B] flex items-center gap-3 font-times shadow-2xs hover:border-[#DE9977] transition-colors"
                   >
-                    <span className="text-[#2E7D32] font-bold">✓</span>
-                    <span className="font-medium">{amenity}</span>
+                    <span className="text-[#B26B4A] text-xs shrink-0">✦</span>
+                    <span className="font-normal tracking-wide text-[14px] sm:text-[15px]">{amenity}</span>
                   </div>
                 ))}
               </div>
