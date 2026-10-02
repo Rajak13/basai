@@ -45,6 +45,8 @@ class CreateTenantOnboardingView(APIView):
         owner_password = request.data.get('owner_password')
         primary_currency = request.data.get('primary_currency')
         mock_db = request.data.get('mock_db', False)
+        initial_status = request.data.get('initial_status')
+        require_approval = request.data.get('require_approval', False)
 
         if not all([hotel_name, slug, owner_email]):
             return Response(
@@ -60,7 +62,9 @@ class CreateTenantOnboardingView(APIView):
                 owner_email=owner_email,
                 owner_password=owner_password,
                 primary_currency=primary_currency,
-                mock_db=mock_db
+                mock_db=mock_db,
+                initial_status=initial_status,
+                require_approval=require_approval,
             )
             return Response({
                 "message": f"Tenant '{hotel_name}' created successfully. Verification email sent.",
@@ -186,21 +190,72 @@ class CreateRoomsView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class CompleteOnboardingView(APIView):
-    """Final step: Finalize onboarding and activate tenant."""
+from .serializers import TenantVerificationDocumentSerializer
+
+
+class UploadVerificationDocumentView(APIView):
+    """
+    Upload official business/legal verification documents during hotel onboarding.
+    Requires tenant_slug and document_type (e.g., PAN_VAT_CERTIFICATE, BUSINESS_REGISTRATION, etc.).
+    """
     permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         tenant_slug = request.data.get('tenant_slug')
+        document_type = request.data.get('document_type')
+        document_number = request.data.get('document_number', '')
+        document_file = request.FILES.get('document_file')
+        notes = request.data.get('notes', '')
+
+        if not tenant_slug or not document_type:
+            return Response(
+                {"error": "tenant_slug and document_type are required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        tenant = Tenant.objects.using('default').filter(slug=tenant_slug).first()
+        if not tenant:
+            return Response(
+                {"error": f"Tenant '{tenant_slug}' not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            doc = OnboardingService.upload_verification_document(
+                tenant=tenant,
+                document_type=document_type,
+                document_file=document_file,
+                document_number=document_number,
+                notes=notes,
+            )
+            return Response(
+                TenantVerificationDocumentSerializer(doc).data,
+                status=status.HTTP_201_CREATED
+            )
+        except ValueError as err:
+            return Response({"error": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as err:
+            return Response({"error": f"Upload failed: {str(err)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CompleteOnboardingView(APIView):
+    """Final step: Finalize onboarding and activate tenant or submit for admin approval."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        tenant_slug = request.data.get('tenant_slug')
+        submit_for_approval = request.data.get('submit_for_approval', False)
+
         tenant = Tenant.objects.using('default').filter(slug=tenant_slug).first()
         if not tenant:
             return Response({"error": f"Tenant '{tenant_slug}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        tenant = OnboardingService.complete_onboarding(tenant)
+        tenant = OnboardingService.complete_onboarding(tenant, submit_for_approval=submit_for_approval)
 
         return Response({
-            "message": f"Onboarding complete! {tenant.hotel_name} is now active.",
+            "message": f"Onboarding complete! Status: {tenant.status}.",
             "tenant_slug": tenant.slug,
             "status": tenant.status,
             "hotel_name": tenant.hotel_name,
         }, status=status.HTTP_200_OK)
+

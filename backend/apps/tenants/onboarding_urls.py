@@ -11,5 +11,7 @@ urlpatterns = [
     path('configure-tax', onboarding_views.ConfigureTaxView.as_view(), name='onboarding-configure-tax'),
     path('configure-payment', onboarding_views.ConfigurePaymentView.as_view(), name='onboarding-configure-payment'),
     path('create-rooms', onboarding_views.CreateRoomsView.as_view(), name='onboarding-create-rooms'),
+    path('upload-document', onboarding_views.UploadVerificationDocumentView.as_view(), name='onboarding-upload-document'),
     path('complete', onboarding_views.CompleteOnboardingView.as_view(), name='onboarding-complete'),
 ]
+

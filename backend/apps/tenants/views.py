@@ -1,6 +1,9 @@
-"""
-Tenant management and subscription views.
-"""
+import secrets
+import logging
+from datetime import timedelta
+from django.utils import timezone
+from django.core.mail import send_mail
+from django.conf import settings
 from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -8,20 +11,25 @@ from rest_framework.response import Response
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 
-from .models import Tenant, Subscription, SubscriptionPayment, TenantMembership
+from .models import Tenant, Subscription, SubscriptionPayment, TenantMembership, StaffInvitation
 from .serializers import (
     SubscriptionSerializer,
     SubscriptionPaymentSerializer,
     TenantMembershipSerializer,
     StaffCreateSerializer,
+    StaffInvitationSerializer,
+    StaffInviteCreateSerializer,
+    StaffAcceptInviteSerializer,
 )
 from .subscription_service import (
     SubscriptionService,
     QuotaExceededException,
     TenantSuspendedException,
 )
+from .permissions import IsTenantOwner, IsTenantManagerOrAbove, _get_tenant
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class StaffViewSet(viewsets.ModelViewSet):
@@ -32,7 +40,7 @@ class StaffViewSet(viewsets.ModelViewSet):
     Requirements: 4.4, 11.1, 11.2, 11.3
     """
     serializer_class = TenantMembershipSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsTenantManagerOrAbove]
 
     def get_queryset(self):
         tenant = getattr(self.request, 'tenant', None)
@@ -96,13 +104,190 @@ class StaffViewSet(viewsets.ModelViewSet):
         )
 
 
+class InviteStaffView(APIView):
+    """
+    Invite new staff member to active tenant.
+    Only callable by Hotel Owners and Managers.
+    Enforces staff quota limits before generating cryptographically signed invitation.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsTenantManagerOrAbove]
+
+    def post(self, request):
+        tenant = _get_tenant(request)
+        if not tenant:
+            return Response(
+                {"error": "No active hotel tenant found for this request domain"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = StaffInviteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        role = serializer.validated_data['role']
+
+        # Enforce staff resource quota
+        try:
+            SubscriptionService.check_resource_quota(tenant, 'staff')
+        except (QuotaExceededException, TenantSuspendedException) as exc:
+            return Response(
+                {"error": str(exc), "code": "QUOTA_EXCEEDED"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if already active staff
+        if TenantMembership.objects.filter(tenant=tenant, user__email=email, is_active=True).exists():
+            return Response(
+                {"error": "User is already an active staff member for this hotel."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        token = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + timedelta(hours=72)
+
+        invitation, _ = StaffInvitation.objects.update_or_create(
+            tenant=tenant,
+            email=email,
+            is_accepted=False,
+            defaults={
+                'role': role,
+                'token': token,
+                'invited_by': request.user,
+                'expires_at': expires_at,
+            }
+        )
+
+        # Send invitation email
+        invite_url = f"https://{tenant.slug}.nantio.com/accept-invite?token={token}"
+        try:
+            send_mail(
+                subject=f"Invitation to join {tenant.hotel_name} on Nantio",
+                message=(
+                    f"Hello,\n\n"
+                    f"{request.user.get_full_name() or request.user.email} has invited you to join "
+                    f"the staff of {tenant.hotel_name} as {invitation.get_role_display()}.\n\n"
+                    f"To accept this invitation and activate your account, click the link below:\n"
+                    f"{invite_url}\n\n"
+                    f"This invitation expires in 72 hours."
+                ),
+                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@nantio.com'),
+                recipient_list=[email],
+                fail_silently=True,
+            )
+        except Exception as e:
+            logger.warning(f"Could not send invitation email to {email}: {e}")
+
+        return Response(
+            StaffInvitationSerializer(invitation).data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class ListStaffInvitationsView(APIView):
+    """
+    List all pending and accepted invitations for the active tenant.
+    Accessible only by Hotel Owners and Managers.
+    """
+    permission_classes = [permissions.IsAuthenticated, IsTenantManagerOrAbove]
+
+    def get(self, request):
+        tenant = _get_tenant(request)
+        if not tenant:
+            return Response(
+                {"error": "No active hotel tenant found for this request domain"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        invitations = StaffInvitation.objects.filter(tenant=tenant).order_by('-created_at')
+        serializer = StaffInvitationSerializer(invitations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class AcceptStaffInvitationView(APIView):
+    """
+    Public endpoint for invited staff members to accept an invite token,
+    set their account password and name, and activate their tenant role.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = StaffAcceptInviteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token = serializer.validated_data['token']
+        invitation = StaffInvitation.objects.filter(token=token).first()
+        if not invitation:
+            return Response(
+                {"error": "Invalid invitation token."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if invitation.is_accepted:
+            return Response(
+                {"error": "This invitation has already been accepted."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if invitation.expires_at < timezone.now():
+            return Response(
+                {"error": "This invitation has expired. Please ask your hotel manager to resend it."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        email = invitation.email
+        user, created = User.objects.get_or_create(
+            email=email,
+            defaults={
+                'username': email,
+                'first_name': serializer.validated_data.get('first_name', ''),
+                'last_name': serializer.validated_data.get('last_name', ''),
+                'phone_number': serializer.validated_data.get('phone_number', ''),
+                'email_verified': True,
+            }
+        )
+        if not created:
+            if serializer.validated_data.get('first_name'):
+                user.first_name = serializer.validated_data['first_name']
+            if serializer.validated_data.get('last_name'):
+                user.last_name = serializer.validated_data['last_name']
+            if serializer.validated_data.get('phone_number'):
+                user.phone_number = serializer.validated_data['phone_number']
+
+        user.set_password(serializer.validated_data['password'])
+        user.email_verified = True
+        user.save()
+
+        # Activate or create membership with invited role
+        membership, m_created = TenantMembership.objects.get_or_create(
+            user=user,
+            tenant=invitation.tenant,
+            defaults={'role': invitation.role, 'is_active': True}
+        )
+        if not m_created:
+            membership.role = invitation.role
+            membership.is_active = True
+            membership.save()
+
+        # Mark invitation accepted
+        invitation.is_accepted = True
+        invitation.save(update_fields=['is_accepted'])
+
+        return Response({
+            "message": f"Invitation accepted! Welcome to {invitation.tenant.hotel_name}.",
+            "tenant_slug": invitation.tenant.slug,
+            "hotel_name": invitation.tenant.hotel_name,
+            "email": user.email,
+            "role": invitation.role,
+            "user_id": str(user.id),
+        }, status=status.HTTP_200_OK)
+
+
 class SubscriptionView(APIView):
     """
     View and manage subscription for the active tenant.
     
     Requirements: 4.1, 4.3, 14.1, 14.4
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwner]
 
     def get(self, request):
         tenant = getattr(request, 'tenant', None)
@@ -146,7 +331,8 @@ class SubscriptionPaymentView(APIView):
     
     Requirements: 4.5, 4.6, 4.7
     """
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated, IsTenantOwner]
+
 
     def post(self, request):
         tenant = getattr(request, 'tenant', None)

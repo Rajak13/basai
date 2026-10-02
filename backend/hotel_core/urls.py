@@ -12,9 +12,11 @@ urlpatterns = [
     path("api/", include("apps.accounts.urls")),
     path("api/tenants/", include("apps.tenants.urls")),
     path("api/onboarding/", include("apps.tenants.onboarding_urls")),
+    path("api/admin/onboarding/", include("apps.tenants.admin_urls")),
     path("api/rooms/", include("apps.rooms.urls")),
     path("api/reservations/", include("apps.reservations.urls")),
     path("api/payments/", include("apps.payments.urls")),
+    path("api/analytics/", include("apps.analytics.urls")),
 ]
 
 if settings.DEBUG:

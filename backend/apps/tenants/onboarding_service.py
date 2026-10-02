@@ -21,7 +21,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
-from .models import Tenant, Subscription, PaymentGatewayConfig, TenantMembership
+from .models import Tenant, Subscription, PaymentGatewayConfig, TenantMembership, TenantVerificationDocument
 from .services import TenantProvisioningService
 from apps.rooms.models import RoomCategory, Room
 
@@ -122,7 +122,9 @@ class OnboardingService:
         owner_email: str,
         owner_password: str = None,
         primary_currency: str = None,
-        mock_db: bool = False
+        mock_db: bool = False,
+        initial_status: str = None,
+        require_approval: bool = False,
     ) -> Dict[str, Any]:
         """
         Step 1: Create tenant registry, owner user, and send verification email.
@@ -132,6 +134,8 @@ class OnboardingService:
         slug_check = OnboardingService.check_slug(slug)
         if not slug_check['available']:
             raise ValueError(slug_check['error'])
+
+        target_status = initial_status or (Tenant.Status.PENDING_APPROVAL if require_approval else Tenant.Status.TRIAL)
 
         # Provision tenant
         if mock_db:
@@ -144,7 +148,7 @@ class OnboardingService:
                 db_name=f"tenant_{uuid.uuid4().hex[:12]}",
                 region=region,
                 primary_currency=primary_currency or 'NPR',
-                status=Tenant.Status.TRIAL,
+                status=target_status,
                 trial_ends_at=timezone.now() + timedelta(days=14),
             )
             user, _ = User.objects.get_or_create(
@@ -172,6 +176,9 @@ class OnboardingService:
                 owner_password=owner_password,
                 primary_currency=primary_currency
             )
+            if target_status and target_status != tenant.status:
+                tenant.status = target_status
+                tenant.save(update_fields=['status'])
             user = User.objects.get(email=owner_email)
 
         # Generate verification token
@@ -277,13 +284,52 @@ class OnboardingService:
         return created
 
     @staticmethod
-    def complete_onboarding(tenant: Tenant) -> Tenant:
+    def upload_verification_document(
+        tenant: Tenant,
+        document_type: str,
+        document_file=None,
+        document_number: str = "",
+        notes: str = ""
+    ) -> TenantVerificationDocument:
         """
-        Final step: Activate tenant for public booking acceptance.
+        Upload and attach a legal/business verification document for tenant review.
+        """
+        valid_types = [choice[0] for choice in TenantVerificationDocument.DocumentType.choices]
+        if document_type not in valid_types:
+            raise ValueError(f"Invalid document_type '{document_type}'. Must be one of {valid_types}.")
+
+        doc = TenantVerificationDocument.objects.create(
+            tenant=tenant,
+            document_type=document_type,
+            document_file=document_file,
+            document_number=document_number,
+            notes=notes,
+            status=TenantVerificationDocument.ReviewStatus.PENDING,
+        )
+        return doc
+
+    @staticmethod
+    def submit_for_approval(tenant: Tenant) -> Tenant:
+        """
+        Submit tenant application for platform admin approval.
+        Moves status to PENDING_APPROVAL.
+        """
+        tenant.status = Tenant.Status.PENDING_APPROVAL
+        tenant.save(update_fields=['status', 'updated_at'])
+        return tenant
+
+    @staticmethod
+    def complete_onboarding(tenant: Tenant, submit_for_approval: bool = False) -> Tenant:
+        """
+        Final step: Activate tenant for public booking acceptance or submit for approval.
         Requirements: 6.7
         """
-        if tenant.status == Tenant.Status.TRIAL:
+        if submit_for_approval:
+            tenant.status = Tenant.Status.PENDING_APPROVAL
+            tenant.save(update_fields=['status', 'updated_at'])
+        elif tenant.status == Tenant.Status.TRIAL:
             # Active in trial mode
             tenant.status = Tenant.Status.ACTIVE
             tenant.save(update_fields=['status', 'updated_at'])
         return tenant
+

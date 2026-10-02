@@ -74,6 +74,7 @@ class Room(models.Model):
         null=True,
         related_name="assigned_rooms",
         limit_choices_to={"role": "HOUSEKEEPING"},
+        db_constraint=False,
     )
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
@@ -95,7 +96,12 @@ class MaintenanceTicket(models.Model):
         RESOLVED = "RESOLVED", "Resolved"
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="maintenance_tickets")
-    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        db_constraint=False,
+    )
     title = models.CharField(max_length=200)
     description = models.TextField()
     priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
