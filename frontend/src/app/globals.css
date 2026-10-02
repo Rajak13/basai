@@ -54,91 +54,18 @@ body {
   scrollbar-width: none !important;
 }
 
-/* Luxury Mobile-Grade Animations */
-@keyframes goldShimmer {
-  0% { transform: translateX(-120%) rotate(25deg); opacity: 0; }
-  20% { opacity: 0.6; }
-  80% { opacity: 0.6; }
-  100% { transform: translateX(220%) rotate(25deg); opacity: 0; }
+/* Prevent iOS Safari & mobile browsers from auto-zooming in when focusing form inputs */
+@media screen and (max-width: 768px) {
+  input,
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
 }
-
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 15px rgba(212, 175, 55, 0.15), inset 0 0 15px rgba(212, 175, 55, 0.05); }
-  50% { box-shadow: 0 0 35px rgba(212, 175, 55, 0.35), inset 0 0 25px rgba(212, 175, 55, 0.15); }
-}
-
-@keyframes scanLaser {
-  0% { top: 0%; opacity: 0.2; }
-  50% { opacity: 0.9; }
-  100% { top: 96%; opacity: 0.2; }
-}
-
-@keyframes stampSlam {
-  0% { transform: scale(2.2) rotate(-15deg); opacity: 0; filter: blur(6px); }
-  60% { transform: scale(0.92) rotate(2deg); opacity: 1; filter: blur(0px); }
-  80% { transform: scale(1.04) rotate(-1deg); }
-  100% { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-
-@keyframes floatGentle {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-6px) rotate(0.5deg); }
-}
-
-@keyframes slideNext {
-  0% { opacity: 0; transform: translateX(36px) scale(0.98); }
-  100% { opacity: 1; transform: translateX(0px) scale(1); }
-}
-
-@keyframes slidePrev {
-  0% { opacity: 0; transform: translateX(-36px) scale(0.98); }
-  100% { opacity: 1; transform: translateX(0px) scale(1); }
-}
-
-.animate-gold-shimmer {
-  position: relative;
-  overflow: hidden;
-}
-.animate-gold-shimmer::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 223, 128, 0.08) 45%,
-    rgba(255, 235, 179, 0.25) 50%,
-    rgba(255, 223, 128, 0.08) 55%,
-    transparent 100%
-  );
-  animation: goldShimmer 4s infinite cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 3s infinite ease-in-out;
-}
-
-.animate-scan-laser {
-  animation: scanLaser 2.2s infinite ease-in-out alternate;
-}
-
-.animate-stamp-slam {
-  animation: stampSlam 0.85s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-.animate-float-gentle {
-  animation: floatGentle 6s infinite ease-in-out;
-}
-
-.animate-slide-next {
-  animation: slideNext 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-slide-prev {
-  animation: slidePrev 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
