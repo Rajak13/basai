@@ -8,6 +8,7 @@ import FullScreenMenu from "@/components/public/FullScreenMenu";
 import DualMonthCalendar from "@/components/public/DualMonthCalendar";
 import MobileCalendarDrawer from "@/components/public/MobileCalendarDrawer";
 import { BASAI_SUITES, SuiteItem } from "@/data/suites";
+import { hotelStore, OnboardedHotel } from "@/lib/hotelStore";
 
 const SANCTUARY_META: { [key: string]: { name: string; heroImg: string; region: string; quote: string } } = {
   all: {
@@ -50,6 +51,15 @@ export default function RoomsPage() {
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "space">("featured");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [activeHotel, setActiveHotel] = useState<OnboardedHotel | null>(null);
+
+  // LOAD ONBOARDED HOTEL
+  useEffect(() => {
+    setActiveHotel(hotelStore.getActiveHotel());
+    const onHotelChange = () => setActiveHotel(hotelStore.getActiveHotel());
+    window.addEventListener("basai-hotel-changed", onHotelChange);
+    return () => window.removeEventListener("basai-hotel-changed", onHotelChange);
+  }, []);
 
   // CUSTOM CALENDAR STATE (MATCHING LANDING PAGE)
   const [checkIn, setCheckIn] = useState<string>("2026-09-30");
@@ -98,10 +108,18 @@ export default function RoomsPage() {
     );
   };
 
+  // DYNAMIC SUITES FROM ONBOARDED HOTEL OR DEMO SANCTUARIES
+  const availableSuites = useMemo(() => {
+    if (activeHotel && activeHotel.suites && activeHotel.suites.length > 0) {
+      return activeHotel.suites;
+    }
+    return BASAI_SUITES;
+  }, [activeHotel]);
+
   // FILTERED SUITES
   const filteredSuites = useMemo(() => {
-    return BASAI_SUITES.filter((suite) => {
-      if (selectedSanctuary !== "all" && suite.sanctuaryId !== selectedSanctuary) return false;
+    return availableSuites.filter((suite) => {
+      if (!activeHotel && selectedSanctuary !== "all" && suite.sanctuaryId !== selectedSanctuary) return false;
       if (suite.specs.maxGuests < guestsCount) return false;
       if (selectedView !== "all") {
         const viewLower = suite.specs.view.toLowerCase();
@@ -125,9 +143,19 @@ export default function RoomsPage() {
       if (sortBy === "space") return b.specs.sqFt - a.specs.sqFt;
       return 0;
     });
-  }, [selectedSanctuary, selectedView, guestsCount, searchQuery, sortBy]);
+  }, [availableSuites, activeHotel, selectedSanctuary, selectedView, guestsCount, searchQuery, sortBy]);
 
-  const currentMeta = SANCTUARY_META[selectedSanctuary] || SANCTUARY_META.all;
+  const currentMeta = useMemo(() => {
+    if (activeHotel) {
+      return {
+        name: activeHotel.name,
+        heroImg: activeHotel.heroImage || "/hero.png",
+        region: activeHotel.location || "Sovereign Sanctuary",
+        quote: activeHotel.tagline || "Architectural sanctuary rooted in Himalayan stillness and living heritage.",
+      };
+    }
+    return SANCTUARY_META[selectedSanctuary] || SANCTUARY_META.all;
+  }, [activeHotel, selectedSanctuary]);
 
   const formatPrice = (priceNpr: number, priceUsd: number) => {
     return currency === "USD" ? `$${priceUsd.toLocaleString()}` : `NPR ${priceNpr.toLocaleString()}`;
@@ -135,6 +163,27 @@ export default function RoomsPage() {
 
   return (
     <div className="w-full min-h-screen bg-[#1E1B19] text-[#FAF1E8] select-none">
+      {/* ONBOARDED HOTEL NOTICE BAR */}
+      {activeHotel && (
+        <div className="sticky top-0 z-50 bg-[#251D17] border-b border-[#D4AF37]/40 px-4 py-2 flex items-center justify-between text-xs font-mono text-amber-200 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Active Commissioned Property: <strong className="text-white font-serif">{activeHotel.name}</strong> ({activeHotel.suites.length} Suites Live)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link href="/onboarding" className="text-[#D4AF37] underline hover:text-white">
+              Studio Setup
+            </Link>
+            <button
+              onClick={() => hotelStore.resetToDefaults()}
+              className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[11px] transition-colors"
+            >
+              Reset to Sample Portfolio
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================
           1. IMMERSIVE MONUMENTAL HERO SECTION
           Replaces standard navbar with an atmospheric framed hero

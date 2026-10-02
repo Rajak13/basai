@@ -8,6 +8,7 @@ import FullScreenMenu from "@/components/public/FullScreenMenu";
 import DualMonthCalendar from "@/components/public/DualMonthCalendar";
 import MobileCalendarDrawer from "@/components/public/MobileCalendarDrawer";
 import { BASAI_SUITES, SuiteItem } from "@/data/suites";
+import { hotelStore } from "@/lib/hotelStore";
 
 interface SuiteDetailViewProps {
   slug: string;
@@ -16,12 +17,16 @@ interface SuiteDetailViewProps {
 export default function SuiteDetailView({ slug }: SuiteDetailViewProps) {
   // FIND CURRENT SUITE OR FALLBACK
   const suite = useMemo(() => {
-    return BASAI_SUITES.find((s) => s.slug === slug) || BASAI_SUITES[0];
+    const activeHotel = hotelStore.getActiveHotel();
+    const pool = activeHotel?.suites && activeHotel.suites.length > 0 ? [...activeHotel.suites, ...BASAI_SUITES] : BASAI_SUITES;
+    return pool.find((s) => s.slug === slug) || pool[0];
   }, [slug]);
 
   // COMPANION SUITES (EXCLUDE CURRENT)
   const companionSuites = useMemo(() => {
-    return BASAI_SUITES.filter((s) => s.id !== suite.id).slice(0, 2);
+    const activeHotel = hotelStore.getActiveHotel();
+    const pool = activeHotel?.suites && activeHotel.suites.length > 0 ? [...activeHotel.suites, ...BASAI_SUITES] : BASAI_SUITES;
+    return pool.filter((s) => s.id !== suite.id).slice(0, 2);
   }, [suite.id]);
 
   // UI STATE

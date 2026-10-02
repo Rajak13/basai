@@ -1,1145 +1,1197 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BasaiLogo from "@/components/public/BasaiLogo";
 import { onboardingApi } from "@/lib/api";
+import { hotelStore, OnboardedHotel } from "@/lib/hotelStore";
 
-interface RoomDraft {
+// ARCHITECTURAL TERROIR CHOICES
+interface TerroirOption {
+  id: string;
+  name: string;
+  elevation: string;
+  region: string;
+  architecture: string;
+  image: string;
+  description: string;
+}
+
+const TERROIR_OPTIONS: TerroirOption[] = [
+  {
+    id: "annapurna-ridge",
+    name: "Annapurna Alpine Ridge",
+    elevation: "2,100m – 3,200m",
+    region: "Pokhara & Western Himalayas",
+    architecture: "Floor-to-ceiling glass pavilions, hand-cut grey slate, and open cedarwood hearths.",
+    image: "/pokhara.png",
+    description: "Panoramic vistas facing Machapuchare and sacred Annapurna peaks.",
+  },
+  {
+    id: "kathmandu-valley",
+    name: "Newari Royal Heritage",
+    elevation: "1,400m",
+    region: "Kathmandu Valley",
+    architecture: "14th-century hand-carved Sal timber, terracotta courtyards, and beaten copper fixtures.",
+    image: "/kathmandu.png",
+    description: "Centuries-old living museum sanctuaries surrounded by temple courtyards.",
+  },
+  {
+    id: "mustang-canyon",
+    name: "Mustang High Plateau",
+    elevation: "2,800m – 3,800m",
+    region: "Mustang Trans-Himalayas",
+    architecture: "Earthen adobe walls, Tibetan slate carvings, and wind-sculpted canyon terraces.",
+    image: "/mustang.png",
+    description: "Sacred high-desert solitude with views across deep gorge canyons.",
+  },
+  {
+    id: "eastern-foothill",
+    name: "Foothill Tea Veranda",
+    elevation: "900m – 1,400m",
+    region: "Bhedetar & Eastern Hills",
+    architecture: "Colonial teak verandas, misted hill terraces, and organic tea garden pavillions.",
+    image: "/hero.png",
+    description: "Subtropical serenity overlooking riverbanks and rolling green tea estates.",
+  },
+];
+
+interface SuiteDraft {
+  id: string;
   name: string;
   basePriceNpr: number;
   bedType: string;
   maxGuests: number;
   view: string;
+  sqFt: number;
+  amenities: string[];
 }
 
-export default function HotelOnboardingPage() {
-  // WIZARD STEP (1 to 6)
+export default function LuxuryOnboardingPage() {
+  const router = useRouter();
+
+  // STAGES (1 to 6)
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [slideDirection, setSlideDirection] = useState<"next" | "prev">("next");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [isCeremonyStamped, setIsCeremonyStamped] = useState<boolean>(false);
 
-  // STEP 1: SANCTUARY IDENTITY & SUBDOMAIN
-  const [hotelName, setHotelName] = useState<string>("Pavilion Lakeview Retreat");
-  const [slug, setSlug] = useState<string>("lakeview-retreat");
+  // STEP 1: ESTATE IDENTITY & MONOGRAM
+  const [hotelName, setHotelName] = useState<string>("The Fishtail Mountain Sanctuary");
+  const [slug, setSlug] = useState<string>("fishtail-sanctuary");
+  const [tagline, setTagline] = useState<string>("Panoramic Himalayan solitude & organic farm living");
+  const [ownerName, setOwnerName] = useState<string>("Aarav Shrestha");
+  const [ownerEmail, setOwnerEmail] = useState<string>("aarav@fishtailsanctuary.com");
+  const [ownerPhone, setOwnerPhone] = useState<string>("+977 9801234567");
+  const [ownerPassword, setOwnerPassword] = useState<string>("Sanctuary2026@Pass");
   const [isCheckingSlug, setIsCheckingSlug] = useState<boolean>(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(true);
-  const [region, setRegion] = useState<string>("pokhara");
-  const [ownerName, setOwnerName] = useState<string>("Subash Gurung");
-  const [ownerEmail, setOwnerEmail] = useState<string>("subash@lakeviewretreat.com");
-  const [ownerPhone, setOwnerPhone] = useState<string>("+977 9856012345");
-  const [ownerPassword, setOwnerPassword] = useState<string>("Sanctuary@2026");
 
-  // STEP 2: TAX & NEPAL COMPLIANCE
-  const [panNumber, setPanNumber] = useState<string>("609123456");
-  const [taxRate, setTaxRate] = useState<number>(13.0);
-  const [serviceCharge, setServiceCharge] = useState<number>(10.0);
-  const [tradeLicenseName, setTradeLicenseName] = useState<string>("Pavilion Hospitality Pvt. Ltd.");
-  const [primaryCurrency, setPrimaryCurrency] = useState<string>("NPR");
+  // STEP 2: TERROIR & AESTHETIC
+  const [selectedTerroir, setSelectedTerroir] = useState<string>("annapurna-ridge");
+  const [customLocationName, setCustomLocationName] = useState<string>("Pokhara Valley, Nepal");
 
-  // STEP 3: PAYMENT GATEWAYS
-  const [enableEsewa, setEnableEsewa] = useState<boolean>(true);
-  const [esewaMerchantId, setEsewaMerchantId] = useState<string>("EPAYTEST");
-  const [enableKhalti, setEnableKhalti] = useState<boolean>(true);
-  const [khaltiPublicKey, setKhaltiPublicKey] = useState<string>("live_secret_key_8492019");
-  const [enableFonepay, setEnableFonepay] = useState<boolean>(true);
-  const [fonepayQrId, setFonepayQrId] = useState<string>("FONEPAY-LAKEVIEW");
-  const [enableStripe, setEnableStripe] = useState<boolean>(false);
-  const [allowPayOnArrival, setAllowPayOnArrival] = useState<boolean>(true);
-
-  // STEP 4: ROOM SUITES & INVENTORY
-  const [rooms, setRooms] = useState<RoomDraft[]>([
+  // STEP 3: LIVING SPACES (SUITE STUDIO)
+  const [suites, setSuites] = useState<SuiteDraft[]>([
     {
-      name: "Annapurna Vista Villa",
-      basePriceNpr: 24000,
+      id: "suite-1",
+      name: "Machapuchare Ridge Villa",
+      basePriceNpr: 28500,
       bedType: "Super King Bed",
       maxGuests: 3,
-      view: "Panoramic Mountain Ridge",
+      view: "Sacred Fishtail Peak Vista",
+      sqFt: 850,
+      amenities: ["Copper Soaking Tub", "Private Teak Veranda", "Estate Butler", "Heated Floors"],
     },
     {
-      name: "Terracotta Courtyard Suite",
-      basePriceNpr: 18500,
+      id: "suite-2",
+      name: "Organic Orchard Pavilion",
+      basePriceNpr: 19500,
       bedType: "King Bed",
       maxGuests: 2,
-      view: "Organic Farm Courtyard",
+      view: "Valley Garden Courtyard",
+      sqFt: 620,
+      amenities: ["Mountain View Balcony", "Artisanal Tisane Bar", "Sonos Sound"],
     },
   ]);
 
-  // STEP 5: VERIFICATION DOCUMENTS
-  const [documentType, setDocumentType] = useState<string>("PAN_VAT_CERTIFICATE");
-  const [documentNumber, setDocumentNumber] = useState<string>("VAT-2026-NPL-9482");
-  const [uploadedFileName, setUploadedFileName] = useState<string>("pan_vat_certificate_2026.pdf");
+  // STEP 4: DINING & ATELIER
+  const [restaurantName, setRestaurantName] = useState<string>("Chuli Mountain Hearth");
+  const [culinaryConcept, setCulinaryConcept] = useState<string>("Highland woodfired gastronomy, organic permaculture herbs, and Himalayan honey");
+  const [morningRitual, setMorningRitual] = useState<string>("Dawn meditation with organic ginger-tulsi tisane overlooking the peaks");
+  const [eveningRitual, setEveningRitual] = useState<string>("Fireside hearth gathering with warm spiced mulled wine & local mountain lore");
 
-  // STEP 6: COMPLETION STATUS
-  const [completedSlug, setCompletedSlug] = useState<string>("");
+  // STEP 5: FISCAL VAULT & PAYMENT RAILS
+  const [panNumber, setPanNumber] = useState<string>("609823145");
+  const [tradeLicenseName, setTradeLicenseName] = useState<string>("Fishtail Hospitality Holdings Pvt. Ltd.");
+  const [primaryCurrency, setPrimaryCurrency] = useState<"NPR" | "USD">("NPR");
+  const [taxRate, setTaxRate] = useState<number>(13.0);
+  const [serviceCharge, setServiceCharge] = useState<number>(10.0);
 
-  // AUTO-SLUGIFY WHEN HOTEL NAME CHANGES
+  const [enableEsewa, setEnableEsewa] = useState<boolean>(true);
+  const [esewaMerchantId, setEsewaMerchantId] = useState<string>("EPAYTEST");
+  const [enableKhalti, setEnableKhalti] = useState<boolean>(true);
+  const [khaltiPublicKey, setKhaltiPublicKey] = useState<string>("live_secret_key_984210");
+  const [enableFonepay, setEnableFonepay] = useState<boolean>(true);
+  const [fonepayMerchantCode, setFonepayMerchantCode] = useState<string>("FONEPAY-FISHTAIL");
+  const [enableStripe, setEnableStripe] = useState<boolean>(false);
+  const [allowPayOnArrival, setAllowPayOnArrival] = useState<boolean>(true);
+
+  // DOCUMENT VERIFICATION SCAN
+  const [documentUploaded, setDocumentUploaded] = useState<boolean>(true);
+  const [documentFileName, setDocumentFileName] = useState<string>("ird_vat_certificate_2026.pdf");
+
+  // GENERATE INITIAL MONOGRAM
+  const monogram = useMemo(() => {
+    const words = hotelName.trim().split(/\s+/);
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[0][0] + (words[1] ? words[1][0] : "")).toUpperCase();
+  }, [hotelName]);
+
+  // TOTAL METRICS
+  const totalKeys = suites.length;
+  const estimatedPotentialRev = useMemo(() => {
+    return suites.reduce((acc, s) => acc + s.basePriceNpr, 0);
+  }, [suites]);
+
+  const activeTerroir = useMemo(() => {
+    return TERROIR_OPTIONS.find((t) => t.id === selectedTerroir) || TERROIR_OPTIONS[0];
+  }, [selectedTerroir]);
+
+  // SLUG CHECK
   const handleHotelNameChange = (name: string) => {
     setHotelName(name);
-    const generatedSlug = name
+    const autoSlug = name
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
-    setSlug(generatedSlug);
+    setSlug(autoSlug);
   };
 
-  // CHECK SLUG LIVE
   useEffect(() => {
     if (!slug) return;
-    const timeout = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       setIsCheckingSlug(true);
       try {
         const res = await onboardingApi.checkSlug(slug);
         setSlugAvailable(res.available);
       } catch {
-        // If backend is offline or sandbox, fallback to client-side validity
         setSlugAvailable(slug.length >= 3 && /^[a-z0-9-]+$/.test(slug));
       } finally {
         setIsCheckingSlug(false);
       }
     }, 400);
-
-    return () => clearTimeout(timeout);
+    return () => clearTimeout(timer);
   }, [slug]);
 
-  // SUBMISSION LOGIC
-  const handleNextStep = async () => {
-    setErrorMessage("");
-    setIsSubmitting(true);
-
-    try {
-      if (currentStep === 1) {
-        // Step 1: Create tenant
-        try {
-          await onboardingApi.createTenant({
-            hotel_name: hotelName,
-            slug,
-            region: "NPL",
-            owner_email: ownerEmail,
-            owner_password: ownerPassword,
-            primary_currency: primaryCurrency,
-            require_approval: true,
-          });
-        } catch {
-          // Graceful fallback for demo
-        }
-        setCurrentStep(2);
-      } else if (currentStep === 2) {
-        // Step 2: Configure tax
-        try {
-          await onboardingApi.configureTax({
-            tenant_slug: slug,
-            tax_type: "VAT",
-            tax_rate: taxRate,
-            tax_registration_number: panNumber,
-            primary_currency: primaryCurrency,
-          });
-        } catch {}
-        setCurrentStep(3);
-      } else if (currentStep === 3) {
-        // Step 3: Configure payment
-        if (enableEsewa) {
-          try {
-            await onboardingApi.configurePayment({
-              tenant_slug: slug,
-              gateway: "ESEWA",
-              merchant_id: esewaMerchantId,
-              secret_key: "esewa_secret_placeholder",
-              test_mode: true,
-            });
-          } catch {}
-        }
-        setCurrentStep(4);
-      } else if (currentStep === 4) {
-        // Step 4: Create room categories
-        try {
-          await onboardingApi.createRooms({
-            tenant_slug: slug,
-            categories: rooms.map((r) => ({
-              name: r.name,
-              slug: r.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-              base_price: r.basePriceNpr,
-              capacity: r.maxGuests,
-            })),
-          });
-        } catch {}
-        setCurrentStep(5);
-      } else if (currentStep === 5) {
-        // Step 5: Finalize & Submit for approval
-        try {
-          await onboardingApi.completeOnboarding({
-            tenant_slug: slug,
-            submit_for_approval: true,
-          });
-        } catch {}
-        setCompletedSlug(slug);
-        setCurrentStep(6);
-      }
-    } catch (err: any) {
-      setErrorMessage(err.message || "An unexpected error occurred. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+  // NAVIGATION CONTROLS
+  const goToNextStep = () => {
+    if (currentStep < 6) {
+      setSlideDirection("next");
+      setCurrentStep((prev) => prev + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
-  // ADD NEW ROOM ROW
-  const addRoom = () => {
-    setRooms((prev) => [
-      ...prev,
+  const goToPrevStep = () => {
+    if (currentStep > 1) {
+      setSlideDirection("prev");
+      setCurrentStep((prev) => prev - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  // PRESET TOGGLES
+  const handlePreFillSample = () => {
+    setHotelName("The Fishtail Mountain Sanctuary");
+    setSlug("fishtail-sanctuary");
+    setTagline("Panoramic Himalayan solitude & organic farm living");
+    setSelectedTerroir("annapurna-ridge");
+    setCustomLocationName("Pokhara Valley · 2,100m");
+    setRestaurantName("Chuli Mountain Hearth");
+    setCulinaryConcept("Highland woodfired gastronomy, organic permaculture herbs, and Himalayan honey");
+    setPanNumber("609823145");
+    setTradeLicenseName("Fishtail Hospitality Holdings Pvt. Ltd.");
+    setSuites([
       {
-        name: `Sanctuary Suite ${prev.length + 1}`,
-        basePriceNpr: 21000,
+        id: "suite-1",
+        name: "Machapuchare Ridge Villa",
+        basePriceNpr: 28500,
+        bedType: "Super King Bed",
+        maxGuests: 3,
+        view: "Sacred Fishtail Peak Vista",
+        sqFt: 850,
+        amenities: ["Copper Soaking Tub", "Private Teak Veranda", "Estate Butler", "Heated Floors"],
+      },
+      {
+        id: "suite-2",
+        name: "Organic Orchard Pavilion",
+        basePriceNpr: 19500,
         bedType: "King Bed",
         maxGuests: 2,
-        view: "Mountain & Valley",
+        view: "Valley Garden Courtyard",
+        sqFt: 620,
+        amenities: ["Mountain View Balcony", "Artisanal Tisane Bar", "Sonos Sound"],
+      },
+      {
+        id: "suite-3",
+        name: "Cloudview Master Residence",
+        basePriceNpr: 42000,
+        bedType: "Emperor Canopy Bed",
+        maxGuests: 4,
+        view: "360° Himalayan Mountain Range",
+        sqFt: 1150,
+        amenities: ["Private Heated Infinity Pool", "Fireplace", "Private Chef Kitchen"],
       },
     ]);
   };
 
-  // REMOVE ROOM ROW
-  const removeRoom = (index: number) => {
-    if (rooms.length <= 1) return;
-    setRooms((prev) => prev.filter((_, i) => i !== index));
+  const handleStartCleanSlate = () => {
+    setHotelName("");
+    setSlug("");
+    setTagline("");
+    setOwnerName("");
+    setOwnerEmail("");
+    setOwnerPhone("");
+    setPanNumber("");
+    setTradeLicenseName("");
+    setRestaurantName("");
+    setCulinaryConcept("");
+    setSuites([
+      {
+        id: "suite-1",
+        name: "Signature Suite",
+        basePriceNpr: 15000,
+        bedType: "King Bed",
+        maxGuests: 2,
+        view: "Mountain Panorama",
+        sqFt: 550,
+        amenities: ["Copper Tub", "Private Balcony"],
+      },
+    ]);
   };
 
-  // STEP METADATA
-  const STEPS = [
-    { num: "01", title: "Identity & Domain" },
-    { num: "02", title: "Fiscal & VAT" },
-    { num: "03", title: "Local Payments" },
-    { num: "04", title: "Suites & Rates" },
-    { num: "05", title: "Verification" },
-    { num: "06", title: "Grand Launch" },
-  ];
+  // SUITE MODIFIERS
+  const handleAddSuite = () => {
+    const newIdx = suites.length + 1;
+    setSuites([
+      ...suites,
+      {
+        id: `suite-${Date.now()}`,
+        name: `Suite Category 0${newIdx}`,
+        basePriceNpr: 22000,
+        bedType: "King Bed",
+        maxGuests: 2,
+        view: "Valley & Forest Vista",
+        sqFt: 600,
+        amenities: ["Private Balcony", "Artisan Coffee Bar", "Fiber WiFi"],
+      },
+    ]);
+  };
+
+  const handleRemoveSuite = (id: string) => {
+    if (suites.length <= 1) return;
+    setSuites(suites.filter((s) => s.id !== id));
+  };
+
+  const handleUpdateSuitePrice = (id: string, delta: number) => {
+    setSuites(
+      suites.map((s) => {
+        if (s.id === id) {
+          const newPrice = Math.max(5000, s.basePriceNpr + delta);
+          return { ...s, basePriceNpr: newPrice };
+        }
+        return s;
+      })
+    );
+  };
+
+  // GRAND COMMISSIONING & COMMISSION DISPATCH
+  const handleCommissionSanctuary = async () => {
+    setIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      // 1. Prepare converted suites
+      const fullSuites = hotelStore.createSuitesFromDrafts(
+        hotelName || "Basai Boutique Sanctuary",
+        slug || "sanctuary",
+        customLocationName || activeTerroir.name,
+        activeTerroir.image,
+        suites
+      );
+
+      // 2. Build Onboarded Hotel Object
+      const onboardedData: OnboardedHotel = {
+        id: `tenant-${slug}-${Date.now()}`,
+        name: hotelName || "Basai Boutique Sanctuary",
+        slug: slug || "sanctuary",
+        tagline: tagline || "Architectural Himalayan Sanctuary",
+        location: customLocationName || activeTerroir.name,
+        elevation: activeTerroir.elevation,
+        vibe: activeTerroir.architecture,
+        heroImage: activeTerroir.image,
+        primaryCurrency,
+        taxRate,
+        serviceCharge,
+        panNumber,
+        tradeLicenseName,
+        restaurantName: restaurantName || "Chuli Dining",
+        paymentGateways: {
+          esewa: enableEsewa,
+          khalti: enableKhalti,
+          fonepay: enableFonepay,
+          stripe: enableStripe,
+          payOnArrival: allowPayOnArrival,
+        },
+        suites: fullSuites,
+        createdAt: new Date().toISOString(),
+        status: "ACTIVE",
+      };
+
+      // 3. Save into local hotelStore
+      hotelStore.saveHotel(onboardedData);
+
+      // 4. Try backend API registration (non-blocking fallback)
+      try {
+        await onboardingApi.createTenant({
+          hotel_name: onboardedData.name,
+          slug: onboardedData.slug,
+          owner_email: ownerEmail,
+          owner_password: ownerPassword,
+          region: "NPL",
+        });
+      } catch (backendErr) {
+        console.warn("Backend API not reachable in current mode, saved locally.", backendErr);
+      }
+
+      // 5. Trigger Wax Seal Stamp Animation
+      setIsCeremonyStamped(true);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setErrorMessage(error.message || "Failed to finalize commissioning.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
-    <div className="w-full min-h-screen bg-[#141211] text-[#FAF1E8] select-none flex flex-col justify-between">
+    <div className="w-full min-h-screen bg-[#110F0E] text-[#FAF1E8] font-times selection:bg-[#D4AF37] selection:text-black">
       {/* ========================================================
-          TOP ONBOARDING HEADER BAR
-          ======================================================== */}
-      <header className="w-full border-b border-white/10 bg-[#1A1816]/90 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-[1520px] mx-auto px-4 sm:px-8 py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-3 group transition-transform hover:scale-105"
-          >
-            <BasaiLogo className="h-7 w-auto text-[#E4AA8B]" />
-            <div className="flex flex-col">
-              <span className="font-stedelijk text-xl tracking-[0.2em] uppercase text-[#E4AA8B] leading-none">
-                BASAI
+          1. HEADER: BRAND & MOBILE-STYLE STORY PROGRESSION
+      ======================================================== */}
+      <header className="sticky top-0 z-50 bg-[#110F0E]/90 backdrop-blur-xl border-b border-white/5 px-4 sm:px-8 py-3.5 transition-all">
+        <div className="max-w-7xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2 group">
+              <BasaiLogo className="h-6 w-auto text-[#D4AF37] group-hover:scale-105 transition-transform" />
+              <span className="font-stedelijk tracking-[0.25em] text-xs sm:text-sm uppercase text-white/90">
+                BASAI <span className="text-[#D4AF37]">STUDIO</span>
               </span>
-              <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/50 mt-1">
-                SANCTUARY PARTNER REGISTRATION
-              </span>
+            </Link>
+            <div className="hidden md:flex items-center gap-2 text-white/30 text-xs pl-3 border-l border-white/10">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+              <span>Sovereign Hotel Setup Engine</span>
             </div>
-          </Link>
-
-          {/* STEP PROGRESS INDICATOR (DESKTOP) */}
-          <div className="hidden lg:flex items-center gap-6">
-            {STEPS.map((step, sIdx) => {
-              const isPast = currentStep > sIdx + 1;
-              const isCurrent = currentStep === sIdx + 1;
-
-              return (
-                <div key={step.num} className="flex items-center gap-2">
-                  <div
-                    className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs transition-all ${
-                      isPast
-                        ? "bg-[#2E7D32] text-white"
-                        : isCurrent
-                        ? "bg-[#E8A88A] text-[#2C231E] font-bold ring-2 ring-[#E8A88A]/30"
-                        : "bg-white/10 text-white/40"
-                    }`}
-                  >
-                    {isPast ? "✓" : step.num}
-                  </div>
-                  <span
-                    className={`text-xs font-mono uppercase tracking-wider ${
-                      isCurrent
-                        ? "text-[#E8A88A] font-semibold"
-                        : isPast
-                        ? "text-white/80"
-                        : "text-white/30"
-                    }`}
-                  >
-                    {step.title}
-                  </span>
-                  {sIdx < STEPS.length - 1 && (
-                    <span className="text-white/20 ml-2">―</span>
-                  )}
-                </div>
-              );
-            })}
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-white/50 hidden sm:inline-block font-times">
-              Need assistance?
-            </span>
-            <a
-              href="mailto:partners@basai.com.np"
-              className="text-xs text-[#E8A88A] hover:underline font-mono"
+          {/* QUICK PRESET CONTROLS */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={handlePreFillSample}
+              className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs text-amber-200/80 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 active:scale-95 transition-all"
             >
-              concierge@basai.com.np
-            </a>
+              ✦ Load Sample Sanctuary
+            </button>
+            <button
+              onClick={handleStartCleanSlate}
+              className="px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs text-white/50 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 active:scale-95 transition-all"
+            >
+              Blank Slate
+            </button>
           </div>
+        </div>
+
+        {/* MOBILE-STYLE PROGRESS PILLS (TOP STORY BARS) */}
+        <div className="max-w-7xl mx-auto mt-3 grid grid-cols-6 gap-1.5 sm:gap-2">
+          {[
+            { step: 1, label: "Identity" },
+            { step: 2, label: "Terroir" },
+            { step: 3, label: "Living Spaces" },
+            { step: 4, label: "Dining" },
+            { step: 5, label: "Fiscal Vault" },
+            { step: 6, label: "Commission" },
+          ].map((item) => {
+            const isCompleted = currentStep > item.step;
+            const isCurrent = currentStep === item.step;
+            return (
+              <button
+                key={item.step}
+                onClick={() => {
+                  if (item.step <= currentStep) {
+                    setSlideDirection(item.step < currentStep ? "prev" : "next");
+                    setCurrentStep(item.step);
+                  }
+                }}
+                className="group relative flex flex-col items-center py-1 text-left focus:outline-none"
+              >
+                {/* Visual Bar */}
+                <div
+                  className={`w-full h-1 sm:h-1.5 rounded-full transition-all duration-500 ${
+                    isCompleted
+                      ? "bg-[#D4AF37]"
+                      : isCurrent
+                      ? "bg-gradient-to-r from-[#D4AF37] to-amber-200 animate-pulse"
+                      : "bg-white/10"
+                  }`}
+                />
+                <span
+                  className={`hidden sm:block text-[10px] mt-1 tracking-wider uppercase transition-colors ${
+                    isCurrent
+                      ? "text-[#D4AF37] font-semibold"
+                      : isCompleted
+                      ? "text-white/70"
+                      : "text-white/30"
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </header>
 
       {/* ========================================================
-          MAIN DUAL-PANE ONBOARDING CONSOLE
-          Left Pane: Multi-step form console
-          Right Pane: Live luxury hotel preview card
-          ======================================================== */}
-      <main className="max-w-[1520px] mx-auto px-4 sm:px-8 py-8 sm:py-12 flex-1 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start">
-          
-          {/* ========================================================
-              LEFT PANE (7 COLS): STEP-BY-STEP LUXURY FORM CONSOLE
-              ======================================================== */}
-          <div className="lg:col-span-7 bg-[#1C1A18] rounded-3xl border border-white/10 p-6 sm:p-10 shadow-2xl relative overflow-hidden">
-            {/* AMBIENT WARM CORNER GLOW */}
-            <div className="absolute top-0 right-0 w-80 h-80 bg-[#E8A88A]/5 rounded-full blur-3xl pointer-events-none" />
-
-            {/* ERROR ALERT */}
-            {errorMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-red-950/60 border border-red-500/30 text-red-200 text-xs flex items-center justify-between">
-                <span>{errorMessage}</span>
-                <button
-                  type="button"
-                  onClick={() => setErrorMessage("")}
-                  className="text-red-400 hover:text-white ml-2"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 1: SANCTUARY IDENTITY & SUBDOMAIN
-                ======================================================== */}
-            {currentStep === 1 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-[#E8A88A]">
-                    <span className="w-2 h-2 rounded-full bg-[#E8A88A]" />
-                    <span>STEP 01 // SANCTUARY IDENTITY</span>
-                  </div>
-                  <h1
-                    className="font-stedelijk uppercase text-2xl sm:text-4xl text-[#FAF1E8] tracking-wide"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    REGISTER YOUR PROPERTY
-                  </h1>
-                  <p className="mt-2 text-xs sm:text-sm text-white/60 font-times leading-relaxed">
-                    Provide the official identity and custom subdomain for your mountain sanctuary.
-                  </p>
-                </div>
-
-                <div className="space-y-4 text-xs font-times">
-                  {/* HOTEL NAME */}
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Sanctuary / Hotel Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={hotelName}
-                      onChange={(e) => handleHotelNameChange(e.target.value)}
-                      placeholder="e.g. Pavilion Lakeview Retreat"
-                      className="w-full bg-[#24211E] border border-white/15 focus:border-[#E8A88A] p-3.5 rounded-xl text-sm font-times text-white outline-none transition"
-                    />
-                  </div>
-
-                  {/* SUBDOMAIN LIVE RESERVATION */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[11px] font-mono uppercase text-[#E8A88A]">
-                        Reserved Web Subdomain *
-                      </label>
-                      <span className="text-[10px] font-mono text-white/40">
-                        {isCheckingSlug ? (
-                          "Verifying availability..."
-                        ) : slugAvailable ? (
-                          <span className="text-[#4CAF50]">✓ Subdomain Available</span>
-                        ) : (
-                          <span className="text-red-400">✗ Already Taken</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="flex items-center bg-[#24211E] border border-white/15 focus-within:border-[#E8A88A] rounded-xl overflow-hidden px-3.5 transition">
-                      <span className="text-white/40 font-mono text-xs">https://</span>
-                      <input
-                        type="text"
-                        value={slug}
-                        onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
-                        placeholder="lakeview-retreat"
-                        className="flex-1 bg-transparent py-3.5 px-1 font-mono text-xs text-white outline-none"
-                      />
-                      <span className="text-[#E8A88A] font-mono text-xs">.basai.com.np</span>
-                    </div>
-                  </div>
-
-                  {/* REGION SELECTION */}
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Himalayan Geographical Region *
-                    </label>
-                    <select
-                      value={region}
-                      onChange={(e) => setRegion(e.target.value)}
-                      className="w-full bg-[#24211E] border border-white/15 focus:border-[#E8A88A] p-3.5 rounded-xl text-xs font-mono text-white outline-none cursor-pointer"
-                    >
-                      <option value="kathmandu">Kathmandu Valley (Heritage & Cultural)</option>
-                      <option value="pokhara">Pokhara Foothills & Phewa Ridge</option>
-                      <option value="mustang">Mustang Highlands & Annapurna Circuit</option>
-                      <option value="dharan">Eastern Hills (Bhedetar, Namje & Koshi)</option>
-                      <option value="chitwan">Chitwan & Terai Riverlands</option>
-                    </select>
-                  </div>
-
-                  {/* OWNER PARTICULARS */}
-                  <div className="pt-2 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Principal Owner / GM Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={ownerName}
-                        onChange={(e) => setOwnerName(e.target.value)}
-                        placeholder="Subash Gurung"
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl text-xs text-white outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Official Contact Mobile *
-                      </label>
-                      <input
-                        type="tel"
-                        value={ownerPhone}
-                        onChange={(e) => setOwnerPhone(e.target.value)}
-                        placeholder="+977 98XXXXXXXX"
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl text-xs text-white outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Owner Email (Login ID) *
-                      </label>
-                      <input
-                        type="email"
-                        value={ownerEmail}
-                        onChange={(e) => setOwnerEmail(e.target.value)}
-                        placeholder="owner@hotel.com"
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl text-xs text-white outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Portal Master Password *
-                      </label>
-                      <input
-                        type="password"
-                        value={ownerPassword}
-                        onChange={(e) => setOwnerPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl text-xs text-white outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 2: FISCAL & NEPAL VAT CONFIGURATION
-                ======================================================== */}
-            {currentStep === 2 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-[#E8A88A]">
-                    <span className="w-2 h-2 rounded-full bg-[#E8A88A]" />
-                    <span>STEP 02 // FISCAL COMPLIANCE</span>
-                  </div>
-                  <h1
-                    className="font-stedelijk uppercase text-2xl sm:text-4xl text-[#FAF1E8] tracking-wide"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    TAXATION & PAN SETTINGS
-                  </h1>
-                  <p className="mt-2 text-xs sm:text-sm text-white/60 font-times leading-relaxed">
-                    Configure your Inland Revenue Department (IRD) Nepal tax structure, PAN/VAT certificate, and luxury service levies.
-                  </p>
-                </div>
-
-                <div className="space-y-4 text-xs font-times">
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Permanent Account Number (PAN / VAT 9-Digits) *
-                    </label>
-                    <input
-                      type="text"
-                      value={panNumber}
-                      onChange={(e) => setPanNumber(e.target.value)}
-                      placeholder="e.g. 609123456"
-                      maxLength={9}
-                      className="w-full bg-[#24211E] border border-white/15 focus:border-[#E8A88A] p-3.5 rounded-xl font-mono text-sm text-white outline-none"
-                    />
-                    <span className="text-[10px] text-white/40 block mt-1">
-                      Issued by Inland Revenue Department (IRD), Ministry of Finance, Nepal.
-                    </span>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Registered Business / Company Legal Entity *
-                    </label>
-                    <input
-                      type="text"
-                      value={tradeLicenseName}
-                      onChange={(e) => setTradeLicenseName(e.target.value)}
-                      placeholder="e.g. Pavilion Hospitality Pvt. Ltd."
-                      className="w-full bg-[#24211E] border border-white/15 p-3.5 rounded-xl text-sm font-times text-white outline-none"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Government VAT Rate (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={taxRate}
-                        onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl font-mono text-xs text-white outline-none"
-                      />
-                      <span className="text-[10px] text-white/40 mt-1 block">Default 13.0% for Nepal hospitality</span>
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                        Sanctuary Service Charge (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={serviceCharge}
-                        onChange={(e) => setServiceCharge(parseFloat(e.target.value) || 0)}
-                        className="w-full bg-[#24211E] border border-white/15 p-3 rounded-xl font-mono text-xs text-white outline-none"
-                      />
-                      <span className="text-[10px] text-white/40 mt-1 block">Standard 10% staff hospitality gratuity</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                      Primary Base Ledger Currency
-                    </label>
-                    <div className="flex gap-3">
-                      {["NPR", "USD"].map((curr) => (
-                        <button
-                          key={curr}
-                          type="button"
-                          onClick={() => setPrimaryCurrency(curr)}
-                          className={`flex-1 py-3 rounded-xl border text-xs font-mono transition cursor-pointer ${
-                            primaryCurrency === curr
-                              ? "bg-[#E8A88A] text-[#2C231E] font-bold border-[#E8A88A]"
-                              : "bg-[#24211E] border-white/15 text-white/70"
-                          }`}
-                        >
-                          {curr === "NPR" ? "Nepalese Rupee (NPR / Rs.)" : "US Dollar (USD / $)"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 3: LOCAL NEPAL PAYMENT GATEWAYS
-                ======================================================== */}
-            {currentStep === 3 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-[#E8A88A]">
-                    <span className="w-2 h-2 rounded-full bg-[#E8A88A]" />
-                    <span>STEP 03 // PAYMENT INTEGRATIONS</span>
-                  </div>
-                  <h1
-                    className="font-stedelijk uppercase text-2xl sm:text-4xl text-[#FAF1E8] tracking-wide"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    REGIONAL PAYMENT GATEWAYS
-                  </h1>
-                  <p className="mt-2 text-xs sm:text-sm text-white/60 font-times leading-relaxed">
-                    Connect direct settlement accounts. Guests can settle reservations instantly in NPR or international cards.
-                  </p>
-                </div>
-
-                <div className="space-y-4 text-xs font-times">
-                  {/* ESEWA INTEGRATION */}
-                  <div className="p-4 rounded-2xl bg-[#24211E] border border-white/15 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-lg bg-[#60BB46]/20 border border-[#60BB46]/40 text-[#60BB46] font-bold flex items-center justify-center text-xs">
-                          eS
-                        </span>
-                        <div>
-                          <span className="font-mono text-xs font-semibold text-white block">
-                            eSewa ePay v2
-                          </span>
-                          <span className="text-[10px] text-white/50">Nepal's #1 Digital Wallet</span>
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={enableEsewa}
-                        onChange={(e) => setEnableEsewa(e.target.checked)}
-                        className="w-4 h-4 accent-[#E8A88A] cursor-pointer"
-                      />
-                    </div>
-                    {enableEsewa && (
-                      <div className="pt-2">
-                        <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                          Merchant / Product Code *
-                        </label>
-                        <input
-                          type="text"
-                          value={esewaMerchantId}
-                          onChange={(e) => setEsewaMerchantId(e.target.value)}
-                          placeholder="e.g. EPAYTEST or Live Merchant ID"
-                          className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg font-mono text-xs text-white outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* KHALTI INTEGRATION */}
-                  <div className="p-4 rounded-2xl bg-[#24211E] border border-white/15 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-lg bg-[#5C2D91]/20 border border-[#5C2D91]/40 text-[#9C65D6] font-bold flex items-center justify-center text-xs">
-                          Kh
-                        </span>
-                        <div>
-                          <span className="font-mono text-xs font-semibold text-white block">
-                            Khalti Wallet & Banking
-                          </span>
-                          <span className="text-[10px] text-white/50">Instant bank transfers & UPI</span>
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={enableKhalti}
-                        onChange={(e) => setEnableKhalti(e.target.checked)}
-                        className="w-4 h-4 accent-[#E8A88A] cursor-pointer"
-                      />
-                    </div>
-                    {enableKhalti && (
-                      <div className="pt-2">
-                        <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                          Khalti Secret Key *
-                        </label>
-                        <input
-                          type="text"
-                          value={khaltiPublicKey}
-                          onChange={(e) => setKhaltiPublicKey(e.target.value)}
-                          placeholder="live_secret_key_xxxxxxxx"
-                          className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg font-mono text-xs text-white outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* FONEPAY QR */}
-                  <div className="p-4 rounded-2xl bg-[#24211E] border border-white/15 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="w-8 h-8 rounded-lg bg-red-600/20 border border-red-500/40 text-red-400 font-bold flex items-center justify-center text-xs">
-                          FP
-                        </span>
-                        <div>
-                          <span className="font-mono text-xs font-semibold text-white block">
-                            Fonepay Interoperable QR
-                          </span>
-                          <span className="text-[10px] text-white/50">Scan from all 50+ Nepal banks</span>
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        checked={enableFonepay}
-                        onChange={(e) => setEnableFonepay(e.target.checked)}
-                        className="w-4 h-4 accent-[#E8A88A] cursor-pointer"
-                      />
-                    </div>
-                    {enableFonepay && (
-                      <div className="pt-2">
-                        <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                          Fonepay Merchant Terminal ID
-                        </label>
-                        <input
-                          type="text"
-                          value={fonepayQrId}
-                          onChange={(e) => setFonepayQrId(e.target.value)}
-                          placeholder="FONEPAY-MERCHANT-ID"
-                          className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg font-mono text-xs text-white outline-none"
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* PAY ON ARRIVAL TOGGLE */}
-                  <label className="flex items-center justify-between p-3.5 rounded-xl bg-[#24211E] border border-white/10 cursor-pointer">
-                    <span className="font-mono text-xs text-white">
-                      Allow Direct Hold / Settle Upon Arrival
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={allowPayOnArrival}
-                      onChange={(e) => setAllowPayOnArrival(e.target.checked)}
-                      className="w-4 h-4 accent-[#E8A88A] cursor-pointer"
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 4: SUITES & INITIAL TARIFF MATRIX
-                ======================================================== */}
-            {currentStep === 4 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-[#E8A88A]">
-                      <span className="w-2 h-2 rounded-full bg-[#E8A88A]" />
-                      <span>STEP 04 // SUITES & INVENTORY</span>
-                    </div>
-                    <h1
-                      className="font-stedelijk uppercase text-2xl sm:text-4xl text-[#FAF1E8] tracking-wide"
-                      style={{ textTransform: "uppercase" }}
-                    >
-                      INITIAL ROOM SUITES
-                    </h1>
-                    <p className="mt-2 text-xs sm:text-sm text-white/60 font-times leading-relaxed">
-                      Configure your starting luxury categories and baseline nightly rates.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addRoom}
-                    className="px-4 py-2 rounded-full bg-[#E8A88A] text-[#2C231E] font-medium text-xs font-mono shadow-xs hover:bg-[#DE9977] transition cursor-pointer"
-                  >
-                    + Add Suite Category
-                  </button>
-                </div>
-
-                <div className="space-y-4 text-xs font-times">
-                  {rooms.map((room, idx) => (
-                    <div
-                      key={idx}
-                      className="p-5 rounded-2xl bg-[#24211E] border border-white/15 space-y-3 relative group"
-                    >
-                      <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                        <span className="font-mono text-[11px] text-[#E8A88A] uppercase font-semibold">
-                          SUITE #{idx + 1}
-                        </span>
-                        {rooms.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeRoom(idx)}
-                            className="text-white/40 hover:text-red-400 font-mono text-[11px]"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                            Suite Name
-                          </label>
-                          <input
-                            type="text"
-                            value={room.name}
-                            onChange={(e) => {
-                              const updated = [...rooms];
-                              updated[idx].name = e.target.value;
-                              setRooms(updated);
-                            }}
-                            className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg text-sm font-times text-white outline-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                            Base Nightly Tariff (NPR)
-                          </label>
-                          <input
-                            type="number"
-                            value={room.basePriceNpr}
-                            onChange={(e) => {
-                              const updated = [...rooms];
-                              updated[idx].basePriceNpr = parseInt(e.target.value) || 0;
-                              setRooms(updated);
-                            }}
-                            className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg font-mono text-sm text-[#E8A88A] outline-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                            Bed Type
-                          </label>
-                          <select
-                            value={room.bedType}
-                            onChange={(e) => {
-                              const updated = [...rooms];
-                              updated[idx].bedType = e.target.value;
-                              setRooms(updated);
-                            }}
-                            className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg text-xs font-mono text-white outline-none"
-                          >
-                            <option>Super King Bed</option>
-                            <option>King Bed</option>
-                            <option>Twin Mountain Beds</option>
-                            <option>King + Outdoor Daybed</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] font-mono uppercase text-white/50 block mb-1">
-                            Horizon View Outlook
-                          </label>
-                          <input
-                            type="text"
-                            value={room.view}
-                            onChange={(e) => {
-                              const updated = [...rooms];
-                              updated[idx].view = e.target.value;
-                              setRooms(updated);
-                            }}
-                            placeholder="e.g. Mountain Panorama"
-                            className="w-full bg-[#1C1A18] border border-white/10 p-2.5 rounded-lg text-xs font-times text-white outline-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 5: LEGAL VERIFICATION & DOCUMENT UPLOAD
-                ======================================================== */}
-            {currentStep === 5 && (
-              <div className="space-y-6 animate-in fade-in duration-300">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-[#E8A88A]">
-                    <span className="w-2 h-2 rounded-full bg-[#E8A88A]" />
-                    <span>STEP 05 // VERIFICATION & TRUST</span>
-                  </div>
-                  <h1
-                    className="font-stedelijk uppercase text-2xl sm:text-4xl text-[#FAF1E8] tracking-wide"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    GOVERNMENT CERTIFICATION
-                  </h1>
-                  <p className="mt-2 text-xs sm:text-sm text-white/60 font-times leading-relaxed">
-                    Upload official government hotel registration or PAN/VAT certificates to obtain the Basai Certified Sanctuary emblem.
-                  </p>
-                </div>
-
-                <div className="space-y-4 text-xs font-times">
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Certificate Category *
-                    </label>
-                    <select
-                      value={documentType}
-                      onChange={(e) => setDocumentType(e.target.value)}
-                      className="w-full bg-[#24211E] border border-white/15 focus:border-[#E8A88A] p-3.5 rounded-xl font-mono text-xs text-white outline-none cursor-pointer"
-                    >
-                      <option value="PAN_VAT_CERTIFICATE">
-                        Inland Revenue Department (IRD) PAN/VAT Certificate
-                      </option>
-                      <option value="BUSINESS_REGISTRATION">
-                        Company Registrar / Municipality Hotel License
-                      </option>
-                      <option value="TOURISM_BOARD_LICENSE">
-                        Nepal Tourism Board Classification Certificate
-                      </option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-[#E8A88A] block mb-1">
-                      Document Serial / License Number *
-                    </label>
-                    <input
-                      type="text"
-                      value={documentNumber}
-                      onChange={(e) => setDocumentNumber(e.target.value)}
-                      placeholder="e.g. VAT-2026-NPL-9482"
-                      className="w-full bg-[#24211E] border border-white/15 p-3.5 rounded-xl font-mono text-xs text-white outline-none"
-                    />
-                  </div>
-
-                  {/* LUXURY FILE DROPZONE */}
-                  <div>
-                    <label className="text-[11px] font-mono uppercase text-white/60 block mb-1">
-                      PDF Document Attachment (Scanned / Digital)
-                    </label>
-                    <div className="border border-dashed border-white/20 rounded-2xl p-8 bg-[#24211E]/50 text-center space-y-3">
-                      <div className="w-12 h-12 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-xl mx-auto text-[#E8A88A]">
-                        📄
-                      </div>
-                      <div>
-                        <span className="font-mono text-xs text-white block">
-                          {uploadedFileName}
-                        </span>
-                        <span className="text-[10px] text-white/40 block mt-0.5">
-                          PDF, PNG, or JPG up to 10MB · Encrypted storage
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setUploadedFileName("pan_license_verified.pdf")}
-                        className="px-4 py-1.5 rounded-full border border-white/20 text-xs font-mono text-white/80 hover:bg-white/10 transition"
-                      >
-                        Choose File to Replace
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ========================================================
-                STEP 6: GRAND LAUNCH SUCCESS SCREEN
-                ======================================================== */}
-            {currentStep === 6 && (
-              <div className="space-y-6 text-center py-6 animate-in zoom-in-95 duration-400">
-                <div className="w-20 h-20 rounded-full bg-[#E8A88A]/10 border border-[#E8A88A] flex items-center justify-center text-3xl mx-auto text-[#E8A88A] shadow-xl">
-                  ✦
-                </div>
-
-                <div>
-                  <div className="inline-flex items-center gap-2 mb-2 px-3 py-1 rounded-full bg-[#2E7D32]/20 border border-[#2E7D32]/50 text-[#81C784] font-mono text-xs">
-                    ✓ ONBOARDING COMPLETE & VERIFIED
-                  </div>
-                  <h1
-                    className="font-stedelijk uppercase text-3xl sm:text-5xl text-[#FAF1E8] tracking-wide"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    WELCOME TO BASAI
-                  </h1>
-                  <p className="mt-3 text-sm text-white/70 max-w-lg mx-auto font-times leading-relaxed">
-                    <strong>{hotelName}</strong> has been provisioned on the Basai architecture. Your custom sanctuary URL is active and ready for reservations.
-                  </p>
-                </div>
-
-                <div className="p-5 rounded-2xl bg-[#24211E] border border-white/10 max-w-md mx-auto text-left font-mono text-xs space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Sanctuary URL:</span>
-                    <span className="text-[#E8A88A] font-semibold">https://{completedSlug || slug}.basai.com.np</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Primary Region:</span>
-                    <span className="text-white">{region.toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">PAN Number:</span>
-                    <span className="text-white">{panNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Active Gateways:</span>
-                    <span className="text-[#81C784]">eSewa · Khalti · Fonepay</span>
-                  </div>
-                </div>
-
-                <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center">
-                  <Link
-                    href="/admin"
-                    className="px-8 py-3.5 rounded-full bg-[#E8A88A] hover:bg-[#DE9977] text-[#2C231E] font-medium text-xs font-mono shadow-xl transition"
-                  >
-                    Enter Management Portal →
-                  </Link>
-                  <Link
-                    href="/rooms"
-                    className="px-8 py-3.5 rounded-full border border-white/20 text-white font-medium text-xs font-mono hover:bg-white/10 transition"
-                  >
-                    Preview in Basai Collection
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            {/* NAVIGATION BUTTONS (BACK & PROCEED) */}
-            {currentStep < 6 && (
-              <div className="mt-10 pt-6 border-t border-white/10 flex items-center justify-between">
-                {currentStep > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}
-                    className="px-5 py-2.5 rounded-full border border-white/20 text-xs font-mono text-white/70 hover:text-white hover:border-white transition cursor-pointer"
-                  >
-                    ← Previous Step
-                  </button>
-                ) : (
-                  <Link
-                    href="/"
-                    className="text-xs font-mono text-white/40 hover:text-white"
-                  >
-                    Cancel
-                  </Link>
-                )}
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleNextStep}
-                  className="px-7 py-3 rounded-full bg-[#E8A88A] hover:bg-[#DE9977] active:bg-[#D58C6B] text-[#2C231E] font-medium text-xs font-mono tracking-wider shadow-xl transition cursor-pointer flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <span>Provisioning...</span>
-                  ) : currentStep === 5 ? (
-                    <span>Submit & Launch Sanctuary →</span>
-                  ) : (
-                    <span>Continue to Step 0{currentStep + 1} →</span>
-                  )}
-                </button>
-              </div>
-            )}
+          2. MAIN IMMERSIVE STAGE (CENTERED LUXURY MOBILE CANVAS)
+      ======================================================== */}
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {errorMessage && (
+          <div className="mb-6 p-4 rounded-xl bg-red-900/30 border border-red-500/30 text-red-200 text-sm flex items-center justify-between">
+            <span>{errorMessage}</span>
+            <button onClick={() => setErrorMessage("")} className="text-white/60 hover:text-white">✕</button>
           </div>
+        )}
 
-          {/* ========================================================
-              RIGHT PANE (5 COLS): LIVE REAL-TIME LUXURY PREVIEW
-              Provides immediate visual excitement as hotelier types
-              ======================================================== */}
-          <div className="lg:col-span-5 sticky top-28 z-20 space-y-6">
-            <div className="text-left mb-2">
-              <span className="font-mono text-[11px] text-[#E8A88A] uppercase tracking-wider block">
-                ✦ LIVE BASAI DIRECTORY PREVIEW
+        {/* ========================================================
+            STAGE 1: THE ESTATE IDENTITY & MONOGRAM
+        ======================================================== */}
+        {currentStep === 1 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 01 · Sovereign Identity
               </span>
-              <span className="text-xs text-white/50 font-times">
-                How your property appears to global and local travelers
-              </span>
-            </div>
-
-            {/* PREVIEW CARD */}
-            <div className="bg-white rounded-3xl overflow-hidden border border-[#E5DACF] shadow-2xl text-[#221B18] transition-all">
-              {/* IMAGE HEADER */}
-              <div className="relative aspect-[16/10] bg-[#1A1816] w-full">
-                <Image
-                  src={
-                    region === "kathmandu"
-                      ? "/kathmandu.png"
-                      : region === "mustang"
-                      ? "/mustang.png"
-                      : region === "pokhara"
-                      ? "/pokhara.png"
-                      : "/hero.png"
-                  }
-                  alt={hotelName}
-                  fill
-                  className="object-cover"
-                />
-                <div className="absolute top-4 left-4 bg-[#E8A88A] text-[#2C231E] font-mono text-[10px] font-bold px-3 py-1 rounded-full uppercase shadow-xs">
-                  {region.toUpperCase()} SANCTUARY
-                </div>
-                <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md text-white font-mono text-[10px] px-3 py-1 rounded-full border border-white/20">
-                  {primaryCurrency}
-                </div>
-                <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-md text-white/90 font-mono text-[11px] px-3 py-1 rounded-full">
-                  https://{slug || "hotel"}.basai.com.np
-                </div>
-              </div>
-
-              {/* DETAILS */}
-              <div className="p-6 space-y-4">
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#B26B4A] font-semibold block">
-                    BASAI LUXURY COLLECTION
-                  </span>
-                  <h3
-                    className="font-stedelijk uppercase text-2xl text-[#221B18] mt-1 leading-tight"
-                    style={{ textTransform: "uppercase" }}
-                  >
-                    {hotelName || "Your Sanctuary Name"}
-                  </h3>
-                  <p className="text-xs text-[#827165] font-times italic mt-0.5">
-                    {tradeLicenseName} · PAN: {panNumber || "Pending"}
-                  </p>
-                </div>
-
-                {/* SUITES SUMMARY */}
-                <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-[#E5DACF] text-xs font-times space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-[#221B18]">
-                      {rooms[0]?.name || "Master Suite"}
-                    </span>
-                    <span className="font-mono font-bold text-[#221B18]">
-                      NPR {rooms[0]?.basePriceNpr.toLocaleString()} / night
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-[#827165] text-[11px]">
-                    <span>{rooms.length} Suite Categories Configured</span>
-                    <span>+{taxRate}% VAT & {serviceCharge}% Service</span>
-                  </div>
-                </div>
-
-                {/* ACTIVE GATEWAY ICONS */}
-                <div className="flex items-center justify-between pt-2 border-t border-[#EAE1D5] text-xs font-mono">
-                  <span className="text-[#827165] text-[10px] uppercase">
-                    Accepted Gateways:
-                  </span>
-                  <div className="flex gap-2">
-                    {enableEsewa && (
-                      <span className="px-2 py-0.5 rounded bg-green-100 text-green-800 text-[10px] font-bold">
-                        eSewa
-                      </span>
-                    )}
-                    {enableKhalti && (
-                      <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold">
-                        Khalti
-                      </span>
-                    )}
-                    {enableFonepay && (
-                      <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 text-[10px] font-bold">
-                        Fonepay
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* TRUST BADGE NOTE */}
-            <div className="p-5 rounded-2xl bg-[#1C1A18] border border-white/10 text-xs font-times text-white/60 space-y-1">
-              <span className="text-[#E8A88A] font-mono text-[10px] uppercase block font-semibold">
-                ✦ PARTNER PRIVILEGES
-              </span>
-              <p>
-                Direct bank settlement, zero lock-in contracts, integrated booking calendar, and access to Basai's high-net-worth international traveler directory.
+              <h1 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                The Estate & Monogram
+              </h1>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                When commissioning a property on Basai, this becomes your sanctuary’s sovereign foundation.
+                Type your hotel’s title below to engrave its royal monogram crest.
               </p>
             </div>
-          </div>
-        </div>
-      </main>
 
-      {/* QUIET MINIMAL FOOTER */}
-      <footer className="w-full border-t border-white/10 py-6 text-center text-xs text-white/40 font-mono">
-        BASAI PARTNER ENTERPRISE ONBOARDING ENGINE · IRD NEPAL COMPLIANT · © 2026
-      </footer>
+            {/* 3D TACTILE METALLIC ESTATE KEY CARD */}
+            <div className="relative max-w-md mx-auto mb-10 group">
+              <div className="relative rounded-2xl bg-gradient-to-br from-[#241E1A] via-[#1A1614] to-[#0F0D0C] p-6 sm:p-7 border border-[#D4AF37]/30 shadow-2xl shadow-black/80 animate-gold-shimmer animate-float-gentle">
+                {/* Card Header & Crest */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {/* Dynamic Monogram Stamp */}
+                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#D4AF37] to-[#8C6D23] p-[1.5px] shadow-lg shadow-black/60">
+                      <div className="w-full h-full rounded-[10px] bg-[#1A1614] flex items-center justify-center border border-amber-300/20">
+                        <span className="font-stedelijk text-xl text-[#FCE6A4] tracking-wider font-bold">
+                          {monogram || "B"}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] tracking-[0.25em] uppercase text-[#D4AF37] block font-mono">
+                        SOVEREIGN ESTATE
+                      </span>
+                      <h3 className="text-base sm:text-lg font-serif font-medium text-white/95 line-clamp-1">
+                        {hotelName || "Your Hotel Sanctuary"}
+                      </h3>
+                    </div>
+                  </div>
+                  <BasaiLogo className="h-6 w-auto text-[#D4AF37]/40" />
+                </div>
+
+                {/* Subdomain Pill */}
+                <div className="mt-6 pt-5 border-t border-white/5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="font-mono text-emerald-300/90 tracking-wide text-[11px]">
+                      {slug ? `${slug}.basai.np` : "sanctuary.basai.np"}
+                    </span>
+                  </div>
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-white/40">
+                    {isCheckingSlug ? "Verifying..." : slugAvailable ? "✓ Reserved" : "Unavailable"}
+                  </span>
+                </div>
+
+                {/* Card Tagline */}
+                <p className="mt-3 text-xs italic text-white/50 font-times line-clamp-1">
+                  &ldquo;{tagline || "Architectural sanctuary rooted in Himalayan living"}&rdquo;
+                </p>
+              </div>
+            </div>
+
+            {/* INPUT FIELDS */}
+            <div className="max-w-xl mx-auto space-y-5 bg-[#171412] p-6 sm:p-8 rounded-2xl border border-white/5">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                  Sanctuary / Hotel Name *
+                </label>
+                <input
+                  type="text"
+                  value={hotelName}
+                  onChange={(e) => handleHotelNameChange(e.target.value)}
+                  placeholder="e.g. The Fishtail Mountain Lodge"
+                  className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-3 text-sm sm:text-base text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-[#D4AF37] transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                  Sanctuary Subdomain Reservation *
+                </label>
+                <div className="flex items-center bg-[#0E0C0B] border border-white/10 focus-within:border-[#D4AF37] rounded-xl px-4 py-3 transition-all">
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    placeholder="fishtail-sanctuary"
+                    className="w-full bg-transparent text-sm sm:text-base text-white placeholder-white/20 focus:outline-none font-mono"
+                  />
+                  <span className="text-white/40 text-xs sm:text-sm font-mono pl-2 border-l border-white/10">
+                    .basai.np
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                  Estate Poetic Tagline
+                </label>
+                <input
+                  type="text"
+                  value={tagline}
+                  onChange={(e) => setTagline(e.target.value)}
+                  placeholder="e.g. Architectural silence overlooking the sacred Annapurna range"
+                  className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 focus:outline-none focus:ring-1 focus:ring-[#D4AF37] transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-white/5">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    General Manager Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    placeholder="Subash Gurung"
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    Official Contact Email *
+                  </label>
+                  <input
+                    type="email"
+                    value={ownerEmail}
+                    onChange={(e) => setOwnerEmail(e.target.value)}
+                    placeholder="gm@sanctuary.com"
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STAGE 2: SANCTUARY TERROIR & ARCHITECTURAL AESTHETIC
+        ======================================================== */}
+        {currentStep === 2 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 02 · Terroir & Atmosphere
+              </span>
+              <h2 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                Sanctuary Terroir
+              </h2>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                Select the architectural atmosphere that best matches your property’s landscape and regional heritage.
+              </p>
+            </div>
+
+            {/* VISUAL CARDS GRID */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-8">
+              {TERROIR_OPTIONS.map((terroir) => {
+                const isSelected = selectedTerroir === terroir.id;
+                return (
+                  <div
+                    key={terroir.id}
+                    onClick={() => {
+                      setSelectedTerroir(terroir.id);
+                      setCustomLocationName(terroir.region);
+                    }}
+                    className={`relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 p-5 border group ${
+                      isSelected
+                        ? "border-[#D4AF37] ring-2 ring-[#D4AF37]/50 bg-[#1E1916] shadow-xl shadow-amber-950/20"
+                        : "border-white/10 bg-[#151210] hover:border-white/20 hover:scale-[1.01]"
+                    }`}
+                  >
+                    {/* Background Preview */}
+                    <div className="relative h-40 w-full rounded-xl overflow-hidden mb-4">
+                      <Image
+                        src={terroir.image}
+                        alt={terroir.name}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+                        <span className="text-[10px] tracking-wider uppercase font-mono px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[#D4AF37] border border-[#D4AF37]/30">
+                          {terroir.elevation}
+                        </span>
+                        {isSelected && (
+                          <span className="w-5 h-5 rounded-full bg-[#D4AF37] text-black text-xs font-bold flex items-center justify-center shadow-lg">
+                            ✓
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <h3 className="font-serif text-lg font-medium text-white mb-1">
+                      {terroir.name}
+                    </h3>
+                    <p className="text-xs text-white/60 line-clamp-2 font-times mb-3">
+                      {terroir.architecture}
+                    </p>
+                    <span className="text-[11px] text-[#D4AF37]/90 font-mono tracking-wide">
+                      {terroir.region}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* CUSTOM LOCATION INPUT */}
+            <div className="max-w-xl mx-auto bg-[#171412] p-5 rounded-2xl border border-white/5">
+              <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                Sanctuary Geographic Coordinates / City Name
+              </label>
+              <input
+                type="text"
+                value={customLocationName}
+                onChange={(e) => setCustomLocationName(e.target.value)}
+                placeholder="e.g. Sarangkot Ridge, Pokhara · 1,600m"
+                className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-3 text-sm text-white focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STAGE 3: THE LIVING SPACES (SUITE STUDIO)
+        ======================================================== */}
+        {currentStep === 3 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-6 sm:mb-8">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 03 · Living Spaces Studio
+              </span>
+              <h2 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                The Suites & Inventory
+              </h2>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                Define the guest living quarters that will populate your booking engine. Adjust tariffs, capacities, and signature attributes.
+              </p>
+            </div>
+
+            {/* METRICS STRIP */}
+            <div className="max-w-2xl mx-auto mb-8 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-center justify-between text-xs sm:text-sm">
+              <div className="flex items-center gap-2 text-white/80">
+                <span className="text-[#D4AF37] font-mono font-bold text-base">{totalKeys}</span>
+                <span>Active Living Spaces</span>
+              </div>
+              <div className="text-right">
+                <span className="text-white/40 text-xs block">Combined Nightly Capacity:</span>
+                <span className="text-emerald-400 font-mono font-semibold">
+                  NPR {estimatedPotentialRev.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* SUITE CARDS LIST */}
+            <div className="max-w-2xl mx-auto space-y-4 mb-6">
+              {suites.map((suite, idx) => (
+                <div
+                  key={suite.id}
+                  className="bg-[#171412] border border-white/10 rounded-2xl p-5 sm:p-6 transition-all hover:border-[#D4AF37]/40 relative group"
+                >
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="flex-1">
+                      <span className="text-[10px] uppercase font-mono tracking-wider text-[#D4AF37]">
+                        Category 0{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={suite.name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSuites(suites.map((s) => (s.id === suite.id ? { ...s, name: val } : s)));
+                        }}
+                        className="w-full bg-transparent text-lg sm:text-xl font-serif text-white font-medium focus:outline-none border-b border-transparent focus:border-[#D4AF37]/50 py-0.5 mt-0.5"
+                      />
+                    </div>
+                    {suites.length > 1 && (
+                      <button
+                        onClick={() => handleRemoveSuite(suite.id)}
+                        className="text-white/30 hover:text-red-400 text-xs p-1 rounded-md transition-colors"
+                      >
+                        ✕ Remove
+                      </button>
+                    )}
+                  </div>
+
+                  {/* PRICE & SPECS CONTROLS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-white/5">
+                    {/* Price with Stepper */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-white/50 mb-1.5">
+                        Base Nightly Rate (NPR)
+                      </label>
+                      <div className="flex items-center bg-[#0E0C0B] border border-white/10 rounded-xl px-2 py-1.5">
+                        <button
+                          onClick={() => handleUpdateSuitePrice(suite.id, -1000)}
+                          className="px-2 text-white/50 hover:text-[#D4AF37] font-bold text-sm"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          value={suite.basePriceNpr}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setSuites(suites.map((s) => (s.id === suite.id ? { ...s, basePriceNpr: val } : s)));
+                          }}
+                          className="w-full bg-transparent text-center font-mono text-sm text-white focus:outline-none"
+                        />
+                        <button
+                          onClick={() => handleUpdateSuitePrice(suite.id, 1000)}
+                          className="px-2 text-white/50 hover:text-[#D4AF37] font-bold text-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bed Type */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-white/50 mb-1.5">
+                        Bed Configuration
+                      </label>
+                      <select
+                        value={suite.bedType}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSuites(suites.map((s) => (s.id === suite.id ? { ...s, bedType: val } : s)));
+                        }}
+                        className="w-full bg-[#0E0C0B] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                      >
+                        <option value="Super King Bed">Super King Bed</option>
+                        <option value="King Bed">King Bed</option>
+                        <option value="Twin Palace Beds">Twin Palace Beds</option>
+                        <option value="Emperor Canopy Bed">Emperor Canopy Bed</option>
+                      </select>
+                    </div>
+
+                    {/* View */}
+                    <div>
+                      <label className="block text-[11px] uppercase tracking-wider text-white/50 mb-1.5">
+                        Vista / Exposure
+                      </label>
+                      <input
+                        type="text"
+                        value={suite.view}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSuites(suites.map((s) => (s.id === suite.id ? { ...s, view: val } : s)));
+                        }}
+                        className="w-full bg-[#0E0C0B] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                        placeholder="Mountain Ridge Vista"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ADD SUITE BUTTON */}
+            <div className="max-w-2xl mx-auto text-center">
+              <button
+                onClick={handleAddSuite}
+                className="w-full py-3.5 rounded-xl border border-dashed border-[#D4AF37]/40 hover:border-[#D4AF37] text-[#D4AF37] text-sm tracking-wide uppercase font-serif hover:bg-[#D4AF37]/5 active:scale-[0.99] transition-all"
+              >
+                + Commission Another Living Space
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STAGE 4: DINING & CULTURAL ATELIER
+        ======================================================== */}
+        {currentStep === 4 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 04 · Gastronomy & Rituals
+              </span>
+              <h2 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                The Dining Atelier
+              </h2>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                Establish the culinary soul of your sanctuary. Configure your in-house restaurant, organic hearth, and signature guest rituals.
+              </p>
+            </div>
+
+            <div className="max-w-xl mx-auto space-y-5 bg-[#171412] p-6 sm:p-8 rounded-2xl border border-white/5">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                  In-House Restaurant Title *
+                </label>
+                <input
+                  type="text"
+                  value={restaurantName}
+                  onChange={(e) => setRestaurantName(e.target.value)}
+                  placeholder="e.g. Chuli Mountain Hearth or Krishnarpan"
+                  className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-3 text-sm sm:text-base text-white focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-white/70 mb-2">
+                  Culinary Concept & Sourcing Philosophy
+                </label>
+                <textarea
+                  rows={3}
+                  value={culinaryConcept}
+                  onChange={(e) => setCulinaryConcept(e.target.value)}
+                  placeholder="Highland woodfired dining, organic permaculture herbs, and slow-braised Himalayan mutton..."
+                  className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-3 text-sm text-white focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-white/5 space-y-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    Dawn Morning Ritual
+                  </label>
+                  <input
+                    type="text"
+                    value={morningRitual}
+                    onChange={(e) => setMorningRitual(e.target.value)}
+                    placeholder="Sunrise ginger tisane on the eastern tea deck"
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    Twilight Fireside Ritual
+                  </label>
+                  <input
+                    type="text"
+                    value={eveningRitual}
+                    onChange={(e) => setEveningRitual(e.target.value)}
+                    placeholder="Evening hearth gathering with organic mountain cider"
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STAGE 5: FISCAL VAULT & NEPAL PAYMENT RAILS
+        ======================================================== */}
+        {currentStep === 5 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 05 · Sovereign Settlement Rails
+              </span>
+              <h2 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                The Fiscal Vault
+              </h2>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                Connect Nepal payment gateways and IRD tax parameters for direct guest remittances.
+              </p>
+            </div>
+
+            {/* PAYMENT RAIL TOGGLE CARDS */}
+            <div className="max-w-2xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+              {/* eSewa */}
+              <div
+                onClick={() => setEnableEsewa(!enableEsewa)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  enableEsewa
+                    ? "bg-[#18231C] border-emerald-500/50 shadow-lg shadow-emerald-950/20"
+                    : "bg-[#141210] border-white/10 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-sm text-emerald-400">eSewa</span>
+                  <span className={`w-3 h-3 rounded-full ${enableEsewa ? "bg-emerald-400 shadow-[0_0_8px_#34d399]" : "bg-white/20"}`} />
+                </div>
+                <p className="text-[11px] text-white/60 font-times">Instant Nepal digital wallet transfers.</p>
+              </div>
+
+              {/* Khalti */}
+              <div
+                onClick={() => setEnableKhalti(!enableKhalti)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  enableKhalti
+                    ? "bg-[#21182B] border-purple-500/50 shadow-lg shadow-purple-950/20"
+                    : "bg-[#141210] border-white/10 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-sm text-purple-400">Khalti</span>
+                  <span className={`w-3 h-3 rounded-full ${enableKhalti ? "bg-purple-400 shadow-[0_0_8px_#c084fc]" : "bg-white/20"}`} />
+                </div>
+                <p className="text-[11px] text-white/60 font-times">Khalti wallet & e-banking gateway.</p>
+              </div>
+
+              {/* Fonepay */}
+              <div
+                onClick={() => setEnableFonepay(!enableFonepay)}
+                className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  enableFonepay
+                    ? "bg-[#261816] border-rose-500/50 shadow-lg shadow-rose-950/20"
+                    : "bg-[#141210] border-white/10 opacity-60"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-sm text-rose-400">Fonepay QR</span>
+                  <span className={`w-3 h-3 rounded-full ${enableFonepay ? "bg-rose-400 shadow-[0_0_8px_#fb7185]" : "bg-white/20"}`} />
+                </div>
+                <p className="text-[11px] text-white/60 font-times">Interbank mobile banking QR codes.</p>
+              </div>
+            </div>
+
+            {/* LEGAL & IRD COMPLIANCE */}
+            <div className="max-w-xl mx-auto space-y-4 bg-[#171412] p-6 sm:p-7 rounded-2xl border border-white/5 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    IRD PAN / VAT Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={panNumber}
+                    onChange={(e) => setPanNumber(e.target.value)}
+                    placeholder="609123456"
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    Registered Corporate Entity
+                  </label>
+                  <input
+                    type="text"
+                    value={tradeLicenseName}
+                    onChange={(e) => setTradeLicenseName(e.target.value)}
+                    placeholder="Fishtail Hospitality Pvt. Ltd."
+                    className="w-full bg-[#0E0C0B] border border-white/10 focus:border-[#D4AF37] rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    VAT Rate (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={taxRate}
+                    onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-[#0E0C0B] border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-white/70 mb-1.5">
+                    Service Charge (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={serviceCharge}
+                    onChange={(e) => setServiceCharge(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-[#0E0C0B] border border-white/10 rounded-xl px-4 py-2.5 text-sm font-mono text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* DOCUMENT SCANNER VISUALIZER */}
+            <div className="max-w-xl mx-auto p-4 rounded-xl bg-[#141210] border border-white/10 relative overflow-hidden">
+              <div className="absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent animate-scan-laser" />
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📄</span>
+                  <div>
+                    <span className="text-white/90 font-mono block">{documentFileName}</span>
+                    <span className="text-emerald-400 text-[10px]">✓ IRD Document Vault Verified</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono uppercase text-white/40">Encrypted AES-256</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            STAGE 6: THE GRAND COMMISSIONING CEREMONY (THE FINALE)
+        ======================================================== */}
+        {currentStep === 6 && (
+          <div className={slideDirection === "next" ? "animate-slide-next" : "animate-slide-prev"}>
+            <div className="text-center max-w-xl mx-auto mb-8 sm:mb-10">
+              <span className="text-[11px] tracking-[0.3em] uppercase text-[#D4AF37] font-mono">
+                Phase 06 · The Seal of Authority
+              </span>
+              <h2 className="font-stedelijk text-2xl sm:text-4xl uppercase tracking-[0.1em] text-white mt-1">
+                Sanctuary Commissioning
+              </h2>
+              <p className="text-sm sm:text-base text-white/60 mt-2 font-times leading-relaxed">
+                Review your estate specifications. Upon sealing, the Basai booking portal and management OS will transform into your sanctuary.
+              </p>
+            </div>
+
+            {/* OFFICIAL SANCTUARY DEED / CERTIFICATE */}
+            <div className="max-w-xl mx-auto bg-gradient-to-b from-[#221B16] to-[#141210] border-2 border-[#D4AF37]/50 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden mb-8">
+              {/* Wax Seal Stamp (Animated Drop on Commissioning) */}
+              {isCeremonyStamped && (
+                <div className="absolute top-6 right-6 z-20 animate-stamp-slam">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#E2B755] via-[#C59B27] to-[#805D0D] p-1 shadow-2xl flex items-center justify-center border-2 border-amber-200">
+                    <div className="w-full h-full rounded-full border border-black/30 flex flex-col items-center justify-center text-center">
+                      <span className="font-stedelijk text-lg text-black font-extrabold leading-none">BASAI</span>
+                      <span className="text-[8px] uppercase tracking-widest text-black/80 font-mono">SEALED</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-center border-b border-white/10 pb-5 mb-5">
+                <span className="text-[10px] tracking-[0.35em] uppercase text-[#D4AF37] font-mono block">
+                  KINGDOM OF NEPAL · BOUTIQUE REGISTRY
+                </span>
+                <h3 className="font-serif text-2xl sm:text-3xl text-white font-medium mt-1">
+                  {hotelName || "Basai Mountain Sanctuary"}
+                </h3>
+                <span className="text-xs italic text-white/60 font-times block mt-1">
+                  {customLocationName || activeTerroir.region}
+                </span>
+              </div>
+
+              {/* Specifications List */}
+              <div className="space-y-3 text-xs sm:text-sm font-times mb-6">
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-white/50">Sovereign Domain:</span>
+                  <span className="text-emerald-400 font-mono font-medium">{slug}.basai.np</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-white/50">Commissioned Suites:</span>
+                  <span className="text-white/90 font-mono">{suites.length} Suites ({suites.map(s => s.name).join(", ")})</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-white/50">Culinary Soul:</span>
+                  <span className="text-white/90">{restaurantName || "Chuli Dining"}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-white/50">Payment Rails:</span>
+                  <span className="text-white/90 font-mono">
+                    {[enableEsewa && "eSewa", enableKhalti && "Khalti", enableFonepay && "Fonepay"].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-white/50">General Manager:</span>
+                  <span className="text-white/90">{ownerName} ({ownerEmail})</span>
+                </div>
+              </div>
+
+              {/* ACTION BUTTONS (AFTER STAMP OR READY TO SEAL) */}
+              {!isCeremonyStamped ? (
+                <button
+                  disabled={isSubmitting}
+                  onClick={handleCommissionSanctuary}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-[#D4AF37] via-[#F3D78A] to-[#D4AF37] text-black font-stedelijk tracking-[0.2em] uppercase text-sm font-bold shadow-xl shadow-amber-900/40 hover:scale-[1.01] active:scale-[0.98] transition-all"
+                >
+                  {isSubmitting ? "ENGRAVING SANCTUARY CHARTER..." : "✦ AFFIX SEAL & COMMISSION SANCTUARY"}
+                </button>
+              ) : (
+                <div className="space-y-3 pt-2">
+                  <button
+                    onClick={() => router.push("/rooms")}
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-stedelijk tracking-[0.15em] uppercase text-sm font-bold shadow-xl shadow-emerald-950/40 hover:scale-[1.01] active:scale-[0.98] transition-all"
+                  >
+                    ✦ OPEN MY LIVE GUEST BOOKING SANCTUARY (/rooms)
+                  </button>
+                  <button
+                    onClick={() => router.push("/admin")}
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white/90 font-serif text-xs tracking-wider uppercase border border-white/10 active:scale-[0.98] transition-all"
+                  >
+                    ENTER GM OPERATIONS COCKPIT (/admin)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            3. BOTTOM NAVIGATION: MOBILE-STYLE STEPPER CONTROLS
+        ======================================================== */}
+        {currentStep < 6 && (
+          <div className="max-w-xl mx-auto flex items-center justify-between pt-6 border-t border-white/10 mt-8">
+            <button
+              onClick={goToPrevStep}
+              disabled={currentStep === 1}
+              className={`px-5 py-2.5 rounded-xl text-xs uppercase tracking-wider font-mono border transition-all ${
+                currentStep === 1
+                  ? "opacity-20 border-white/5 cursor-not-allowed"
+                  : "border-white/10 hover:border-white/30 text-white/70 hover:text-white"
+              }`}
+            >
+              ← Back
+            </button>
+
+            <span className="text-xs text-white/40 font-mono tracking-widest uppercase">
+              Phase 0{currentStep} / 06
+            </span>
+
+            <button
+              onClick={goToNextStep}
+              className="px-6 py-2.5 rounded-xl bg-[#D4AF37] hover:bg-[#E5C158] text-black text-xs uppercase tracking-widest font-mono font-bold shadow-lg shadow-amber-950/30 active:scale-95 transition-all"
+            >
+              Continue →
+            </button>
+          </div>
+        )}
+      </main>
     </div>
   );
 }
