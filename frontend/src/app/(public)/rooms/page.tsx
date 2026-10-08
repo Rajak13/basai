@@ -8,6 +8,7 @@ import BasaiLogo from "@/components/public/BasaiLogo";
 import FullScreenMenu from "@/components/public/FullScreenMenu";
 import DualMonthCalendar from "@/components/public/DualMonthCalendar";
 import MobileCalendarDrawer from "@/components/public/MobileCalendarDrawer";
+import RolesManualModal from "@/components/public/RolesManualModal";
 import { BASAI_SUITES, SuiteItem } from "@/data/suites";
 
 const SANCTUARY_META: { [key: string]: { name: string; heroImg: string; region: string; quote: string } } = {
@@ -52,6 +53,7 @@ function RoomsPageContent() {
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "space">("featured");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
 
   // READ QUERY PARAMETERS (?sanctuary=mustang or ?hotel=mustang)
   useEffect(() => {
@@ -184,6 +186,18 @@ function RoomsPageContent() {
             >
               Overview
             </Link>
+
+            {/* ROLES & SYSTEM MANUAL '?' TRIGGER BUTTON */}
+            <button
+              type="button"
+              onClick={() => setIsManualOpen(true)}
+              aria-label="Open System Manual & Roles Guide"
+              title="Basai Operating Manual & Roles Guide"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border border-[#D4AF37]/50 hover:border-[#E4AA8B] bg-white/5 hover:bg-[#D4AF37]/15 text-[#D4AF37] hover:text-[#FAF1E8] flex items-center justify-center font-mono text-sm font-bold transition cursor-pointer shadow-xs"
+            >
+              ?
+            </button>
+
             <button
               type="button"
               onClick={() => setIsMenuOpen(true)}
@@ -801,6 +815,12 @@ function RoomsPageContent() {
         isOpen={isMenuOpen}
         onClose={() => setIsMenuOpen(false)}
         activeBrand="Basai"
+      />
+
+      {/* ROLES & SYSTEM ARCHITECTURE MANUAL MODAL */}
+      <RolesManualModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
       />
     </div>
   );
