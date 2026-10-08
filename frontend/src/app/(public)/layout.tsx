@@ -11,8 +11,12 @@ export default function PublicLayout({
 }) {
   const pathname = usePathname();
   const isHomePage = pathname === "/";
-  // The room availability & booking pages have their own bespoke immersive heroes and do not need the generic navbar/footer
-  const isImmersiveFlow = pathname.startsWith("/rooms") || pathname === "/booking";
+  // The room availability, sanctuary showcase, and booking pages have their own bespoke immersive heroes and do not need the generic navbar/footer
+  const isImmersiveFlow =
+    pathname.startsWith("/rooms") ||
+    pathname === "/booking" ||
+    pathname.startsWith("/sanctuaries") ||
+    pathname.startsWith("/hotels");
 
   return (
     <div className="flex flex-col min-h-screen">

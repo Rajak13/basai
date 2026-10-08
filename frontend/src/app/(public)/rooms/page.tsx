@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import BasaiLogo from "@/components/public/BasaiLogo";
@@ -42,7 +43,8 @@ const SANCTUARY_META: { [key: string]: { name: string; heroImg: string; region: 
   },
 };
 
-export default function RoomsPage() {
+function RoomsPageContent() {
+  const searchParams = useSearchParams();
   const [selectedSanctuary, setSelectedSanctuary] = useState<string>("all");
   const [selectedView, setSelectedView] = useState<string>("all");
   const [guestsCount, setGuestsCount] = useState<number>(2);
@@ -50,6 +52,21 @@ export default function RoomsPage() {
   const [sortBy, setSortBy] = useState<"featured" | "price-asc" | "price-desc" | "space">("featured");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // READ QUERY PARAMETERS (?sanctuary=mustang or ?hotel=mustang)
+  useEffect(() => {
+    const sanctuaryParam =
+      searchParams.get("sanctuary") ||
+      searchParams.get("hotel") ||
+      searchParams.get("tenant");
+    if (sanctuaryParam && SANCTUARY_META[sanctuaryParam.toLowerCase()]) {
+      setSelectedSanctuary(sanctuaryParam.toLowerCase());
+    }
+    const checkInParam = searchParams.get("checkIn");
+    if (checkInParam) setCheckIn(checkInParam);
+    const checkOutParam = searchParams.get("checkOut");
+    if (checkOutParam) setCheckOut(checkOutParam);
+  }, [searchParams]);
 
   // CUSTOM CALENDAR STATE (MATCHING LANDING PAGE)
   const [checkIn, setCheckIn] = useState<string>("2026-09-30");
@@ -786,5 +803,21 @@ export default function RoomsPage() {
         activeBrand="Basai"
       />
     </div>
+  );
+}
+
+export default function RoomsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full min-h-screen bg-[#1E1B19] flex items-center justify-center">
+          <span className="font-mono text-xs uppercase tracking-widest text-[#E4AA8B] animate-pulse">
+            Loading Basai Sanctuaries...
+          </span>
+        </div>
+      }
+    >
+      <RoomsPageContent />
+    </Suspense>
   );
 }
